@@ -1,8 +1,8 @@
 # 轻账 · QingJi
 
-离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，无任何网络权限，数据全部留在本机。
+离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，不上传任何数据；唯一的联网动作是关于页里手动点「检查更新」，且只访问你自己填的更新源地址。
 
-包名 `com.qingxi.ledger`，当前版本 `0.1.0`（versionCode 1）。
+包名 `com.qingxi.ledger`，当前版本 `0.1.0`（versionCode 1）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
 ## 功能
 
@@ -102,7 +102,28 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleD
 adb -s <serial> install -r -t app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Release 变体开启了 R8 与资源压缩，但**仍使用 debug 签名**，正式发布前需要替换 `signingConfig`。
+### 发布签名
+
+`app/build.gradle.kts` 从根目录的 `keystore.properties` 读取 release 签名，该文件与 `keystore/` 目录都已在 `.gitignore` 里，**不要提交、不要分享**。仓库克隆下来如果没有这个文件，release 构建会自动回退到 debug 签名，保证别人也能编出包。
+
+本地要出正式包时，按下面格式建 `keystore.properties`：
+
+```properties
+storeFile=keystore/release.keystore
+storePassword=<口令>
+keyAlias=<别名>
+keyPassword=<口令>
+```
+
+```bash
+JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleRelease --console=plain
+```
+
+产物：`app/build/outputs/apk/release/app-release.apk`。两个注意点：
+
+- 首次跑 release 需要联网，`compose-group-mapping` 这个 release 专用依赖不在离线缓存里
+- 发布密钥一旦对外发布就不能再换：换签名必须先卸载旧包，卸载会连带清空 `getExternalFilesDir` 里的备份文件，所以发版前先把备份导出到手机其他位置
+
 
 ## 数据与存储
 
@@ -162,7 +183,7 @@ Release 变体开启了 R8 与资源压缩，但**仍使用 debug 签名**，正
 ## 开发约定
 
 - MVVM：每个页面一个 `ViewModel`，通过 `appViewModel<VM>()` 取，作用域跟随导航返回栈条目
-- `AppGraph` 只暴露仓库，ViewModel 构造函数必须**有且仅有一个 `AppGraph` 参数**（工厂用反射匹配，多参或换序会直接崩）
+- `AppGraph` 只暴露仓库，ViewModel 构造函数必须**有且仅有一个 `AppGraph` 参数**（工厂用反射匹配，多参或换序会直接崩）；release 的 R8 靠 `proguard-rules.pro` 里那条 `-keep class * extends androidx.lifecycle.ViewModel { <init>(...); }` 保住构造函数，改反射写法要同步改这条规则
 - 数据库实例在 `MainActivity.onCreate` 里 `AppDatabase.init()` 初始化，小组件读库前也调它
 - 注释写中文，只解释「为什么」；界面文案与 `onClickLabel` 均为中文无障碍标签
 - `rememberNavController()` 必须挂在 `AppLockGate` **外层**——上锁会把 content 整棵移出组合，导航栈提到外面才能在解锁后原样恢复
@@ -172,6 +193,6 @@ Release 变体开启了 R8 与资源压缩，但**仍使用 debug 签名**，正
 
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
-- 在线更新目前只验证了界面与地址校验分支：还没有可用的更新源，下载 → 校验 → 调起安装器这段要等第一个真实发布版本才能跑通
+- 在线更新的「检查 → 下载 → 校验 → 调起安装器」还没在界面上跑通过：v0.1.0 的 release 包已经发布，但填地址这一步在测试 AVD 上做不了（拼音输入法把 `:` `/` `.` 打成全角），目前只用 curl 验证过下载地址本身可读
 - 忘记 PIN 只能清除应用数据，唯一的出路是事先导出备份
 - 不支持预算、资产账户、周期记账、多账本、云同步、收入记录
