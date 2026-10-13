@@ -39,6 +39,7 @@ import com.qingxi.ledger.data.settings.AppSettings
 import com.qingxi.ledger.data.settings.SettingsRepository
 import com.qingxi.ledger.data.settings.ThemeMode
 import com.qingxi.ledger.data.settings.ThemePalette
+import com.qingxi.ledger.data.update.UpdateStatus
 import com.qingxi.ledger.di.LocalAppGraph
 import com.qingxi.ledger.di.appViewModel
 import com.qingxi.ledger.ui.theme.ExpenseRed
@@ -65,6 +66,9 @@ fun MineScreen(onNavigate: (String) -> Unit) {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "0.1.0"
     }
+    // 冷启动自动检查的结果：有新版本就在「关于」入口上标出来。
+    val updateStatus by graph.updateController.status.collectAsStateWithLifecycle()
+    val updateBadge = (updateStatus as? UpdateStatus.Available)?.info?.versionName
 
     val colors = MaterialTheme.colorScheme
     Box(
@@ -135,7 +139,7 @@ fun MineScreen(onNavigate: (String) -> Unit) {
                 SummaryRow(
                     emoji = "ℹ️",
                     title = "关于",
-                    summary = "版本 $versionName",
+                    summary = updateBadge?.let { "发现新版本 $it" } ?: "版本 $versionName",
                     onClick = { onNavigate("about") }
                 )
             }

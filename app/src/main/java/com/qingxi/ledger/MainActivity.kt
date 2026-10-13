@@ -140,6 +140,10 @@ private fun QingJiRoot(
     val currentRoute = entry?.destination?.route
     val showTabBar = currentRoute == null || currentRoute in TAB_ROUTES
 
+    // 解锁之后（即真正进入应用）才检查更新，控制器内部保证一个进程只发一次请求。
+    val graph = LocalAppGraph.current
+    LaunchedEffect(Unit) { graph.updateController.autoCheckOnColdStart() }
+
     LaunchedEffect(openRecord) {
         if (openRecord) {
             navController.navigate(ROUTE_RECORD) { launchSingleTop = true }

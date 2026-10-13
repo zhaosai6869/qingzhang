@@ -1,5 +1,6 @@
 package com.qingxi.ledger.ui.update
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,20 +14,20 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.qingxi.ledger.data.update.UpdateStatus
 import com.qingxi.ledger.di.appViewModel
 import com.qingxi.ledger.ui.settings.NoteText
@@ -34,49 +35,93 @@ import com.qingxi.ledger.ui.settings.SectionCard
 import com.qingxi.ledger.ui.settings.formatBytes
 
 /**
- * 关于页的「版本更新」区块：填更新源、手动检查、下载校验、调起系统安装器。
- * 不点按钮就不联网，因此不需要后台服务，也不会每次打开应用都发请求。
+ * 关于页的「版本更新」区块：默认用内置更新源，冷启动自动检查一次，这里只做手动复查与下载安装。
+ * 自定义地址是高级项，默认收起，填了就走自己的源。
  */
 @Composable
-fun UpdateSection(savedUrl: String) {
+fun UpdateSection(
+    savedUrl: String,
+    autoCheck: Boolean,
+    status: UpdateStatus,
+    installedVersion: String
+) {
     val viewModel = appViewModel<UpdateViewModel>()
-    val status by viewModel.status.collectAsStateWithLifecycle()
-    var url by rememberSaveable { mutableStateOf("") }
+    val controller = viewModel.controller
+    var customUrl by rememberSaveable { mutableStateOf(savedUrl) }
+    var showCustom by rememberSaveable { mutableStateOf(savedUrl.isNotBlank()) }
     var installFailed by remember { mutableStateOf(false) }
 
-    // 偏好是异步读出来的，首次拿到已保存地址时填入输入框，但不覆盖用户正在输入的内容。
-    LaunchedEffect(savedUrl) {
-        if (savedUrl.isNotBlank() && url.isBlank()) url = savedUrl
-    }
-
     SectionCard(title = "版本更新") {
-        OutlinedTextField(
-            value = url,
-            onValueChange = { url = it.trim() },
-            label = { Text("更新源地址") },
-            placeholder = { Text("https://example.com/qingji/update.json") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "打开应用时自动检查",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "只读版本清单，不下载任何东西；失败也不提示",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = autoCheck,
+                onCheckedChange = viewModel::setAutoCheck
+            )
+        }
         Spacer(Modifier.height(8.dp))
-        NoteText(
-            text = "更新源是一份 JSON 清单，需要包含 versionCode、versionName、apkUrl、sha256，" +
-                "可选 sizeBytes 与 notes。只接受 https 地址，安装包必须带 SHA-256 校验值。",
-            modifier = Modifier.padding(bottom = 10.dp)
+        Text(
+            text = "更新源：${viewModel.sourceLabel(savedUrl)} · ${if (showCustom) "收起" else "自定义"}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .clickable { showCustom = !showCustom }
+                .padding(vertical = 6.dp)
         )
+        if (showCustom) {
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = customUrl,
+                onValueChange = { customUrl = it.trim() },
+                label = { Text("自定义更新源地址（留空用内置）") },
+                placeholder = { Text("https://example.com/qingji/update.json") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { viewModel.saveSourceUrl(customUrl) }
+            ) { Text("保存自定义地址") }
+        }
+        Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
                 modifier = Modifier.weight(1f),
                 enabled = status !is UpdateStatus.Checking && status !is UpdateStatus.Downloading,
                 onClick = {
                     installFailed = false
-                    viewModel.saveSourceUrl(url)
-                    viewModel.check(url)
+                    controller.check(savedUrl)
                 }
-            ) { Text(if (status is UpdateStatus.Downloading) "下载中…" else "检查更新") }
+            ) {
+                Text(
+                    when (status) {
+                        is UpdateStatus.Downloading -> "下载中…"
+                        is UpdateStatus.Checking -> "检查中…"
+                        else -> if (status is UpdateStatus.Idle) "检查更新" else "重新检查"
+                    }
+                )
+            }
+            if (status is UpdateStatus.Checking) {
+                OutlinedButton(modifier = Modifier.weight(1f), onClick = controller::cancelCheck) {
+                    Text("取消")
+                }
+            }
             if (status is UpdateStatus.Downloading) {
-                OutlinedButton(modifier = Modifier.weight(1f), onClick = viewModel::cancelDownload) {
+                OutlinedButton(modifier = Modifier.weight(1f), onClick = controller::cancelDownload) {
                     Text("取消")
                 }
             }
@@ -84,11 +129,11 @@ fun UpdateSection(savedUrl: String) {
 
         when (val current = status) {
             UpdateStatus.Idle, UpdateStatus.Checking -> Unit
-            is UpdateStatus.UpToDate -> StatusText("已是最新版本（${current.installedVersion}）")
+            is UpdateStatus.UpToDate -> StatusText("已是最新版本（${installedVersion}）")
             is UpdateStatus.Failed -> StatusText(current.reason, error = true)
             is UpdateStatus.Available -> AvailableBlock(current) {
                 installFailed = false
-                viewModel.download(current.info)
+                controller.download(current.info)
             }
             is UpdateStatus.Downloading -> DownloadingBlock(current)
             is UpdateStatus.ReadyToInstall -> ReadyBlock(

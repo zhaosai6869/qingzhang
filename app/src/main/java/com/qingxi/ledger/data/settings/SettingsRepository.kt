@@ -28,7 +28,8 @@ data class AppSettings(
     val lastCategoryId: Long = 0L,
     val weekStartsOnSunday: Boolean = false,
     val monthStartDay: Int = 1,
-    val updateSourceUrl: String = ""
+    val updateSourceUrl: String = "",
+    val autoUpdateCheck: Boolean = true
 )
 
 class SettingsRepository(private val context: Context) {
@@ -39,6 +40,7 @@ class SettingsRepository(private val context: Context) {
     private val keyWeekStartsOnSunday = booleanPreferencesKey("week_start_sunday")
     private val keyMonthStartDay = intPreferencesKey("month_start_day")
     private val keyUpdateSourceUrl = stringPreferencesKey("update_source_url")
+    private val keyAutoUpdateCheck = booleanPreferencesKey("auto_update_check")
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
@@ -47,12 +49,17 @@ class SettingsRepository(private val context: Context) {
             lastCategoryId = prefs[keyLastCategoryId] ?: 0L,
             weekStartsOnSunday = prefs[keyWeekStartsOnSunday] ?: false,
             monthStartDay = (prefs[keyMonthStartDay] ?: 1).coerceIn(1, MAX_MONTH_START_DAY),
-            updateSourceUrl = prefs[keyUpdateSourceUrl] ?: ""
+            updateSourceUrl = prefs[keyUpdateSourceUrl] ?: "",
+            autoUpdateCheck = prefs[keyAutoUpdateCheck] ?: true
         )
     }
 
     suspend fun setUpdateSourceUrl(url: String) {
         context.dataStore.edit { it[keyUpdateSourceUrl] = url.trim() }
+    }
+
+    suspend fun setAutoUpdateCheck(enabled: Boolean) {
+        context.dataStore.edit { it[keyAutoUpdateCheck] = enabled }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

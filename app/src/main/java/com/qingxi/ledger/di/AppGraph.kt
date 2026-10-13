@@ -12,6 +12,7 @@ import com.qingxi.ledger.data.category.CategoryRepository
 import com.qingxi.ledger.data.db.AppDatabase
 import com.qingxi.ledger.data.settings.SettingsRepository
 import com.qingxi.ledger.data.tx.TransactionRepository
+import com.qingxi.ledger.data.update.UpdateController
 import com.qingxi.ledger.data.update.UpdateRepository
 import java.io.File
 
@@ -35,6 +36,8 @@ class AppGraph private constructor(private val context: Context) {
     }
 
     val updates: UpdateRepository by lazy { UpdateRepository(this) }
+
+    val updateController: UpdateController by lazy { UpdateController(this) }
 
     val attachmentDir: File by lazy {
         File(context.filesDir, "attachments").apply { if (!exists()) mkdirs() }

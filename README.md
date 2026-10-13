@@ -1,6 +1,6 @@
 # 轻账 · QingJi
 
-离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，不上传任何数据；唯一的联网动作是关于页里手动点「检查更新」，且只访问你自己填的更新源地址。
+离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，可以在「关于」页关掉。
 
 包名 `com.qingxi.ledger`，当前版本 `0.1.0`（versionCode 1）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
@@ -33,7 +33,9 @@
 - PIN 用 PBKDF2-HMAC-SHA256（120k 次迭代）派生后只存哈希，连错 5 次锁定 1 分钟
 
 **在线更新**
-- 「关于」页填更新源地址并手动点「检查更新」才联网，没有后台轮询
+- 更新源内置（本仓库 `update.json`），不用填地址；打开应用后自动检查一次，发现新版本在「我的 → 关于」上标出来
+- 不想自动联网就在「关于 → 版本更新」里关掉「打开应用时自动检查」，关掉后仍可手动点「检查更新」
+- 也支持自定义更新源地址（高级项，默认收起），填了就走自己的源
 - 清单比对 `versionCode`，有新版则下载 APK 到应用缓存，SHA-256 校验通过后调起系统安装器
 - 只接受 https 地址；缺 `sha256` 的清单直接拒绝，不安装无校验值的包
 
@@ -72,7 +74,7 @@ app/src/main/java/com/qingxi/ledger/
 │   ├── category/            CategoryEntity / Dao / Repository / CategorySeeder
 │   ├── settings/            SettingsRepository（DataStore: qingji_settings）
 │   ├── backup/              BackupRepository：JSON / 加密 .qjbak / CSV 导出与导入
-│   ├── update/              UpdateRepository：清单解析 + APK 下载与 SHA-256 校验
+│   ├── update/              UpdateRepository（清单解析 + 下载校验）与 UpdateController（进程级检查状态）
 │   └── lock 在 ui/lock 下    应用锁偏好独立存于 qingji_lock
 ├── ui/
 │   ├── record/  flow/  calendar/  stats/  settings/  lock/
@@ -124,6 +126,14 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 - 首次跑 release 需要联网，`compose-group-mapping` 这个 release 专用依赖不在离线缓存里
 - 发布密钥一旦对外发布就不能再换：换签名必须先卸载旧包，卸载会连带清空 `getExternalFilesDir` 里的备份文件，所以发版前先把备份导出到手机其他位置
 
+### 发版流程
+
+自动更新读的是仓库 `main` 分支的 `update.json`，所以**这个文件没同步，用户就收不到更新提示**。每次发版按顺序做完四步：
+
+1. 改 `app/build.gradle.kts` 里的 `versionCode` / `versionName`
+2. `./gradlew :app:assembleRelease`，把产物传到 GitHub Release
+3. 用 release 资产的直链和 `sha256sum app-release.apk` 的结果改写根目录 `update.json`
+4. 提交并 push `update.json`——push 之前 `https://raw.githubusercontent.com/.../main/update.json` 还是旧内容
 
 ## 数据与存储
 
@@ -151,7 +161,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 
 ## 更新源格式
 
-更新源是用户在「关于 → 版本更新」里自行填写的一个 **https** JSON 地址，由发布者自己托管（对象存储、Releases 直链、静态站都行）：
+更新源是一份 **https** JSON 清单。默认地址是仓库根目录的 `update.json`（`https://raw.githubusercontent.com/zhaosai6869/qingzhang/main/update.json`），用户也可以在「关于 → 版本更新」里换成自己托管的地址（对象存储、Releases 直链、静态站都行）：
 
 ```json
 {
@@ -172,7 +182,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 
 ## 隐私与安全
 
-- 账单数据不上传、不采集、不上报；唯一的联网入口是「关于 → 检查更新」，只访问你自己填写的更新源地址，不点按钮就不发任何请求
+- 账单数据不上传、不采集、不上报；联网只有「读版本清单」一处，默认地址是本仓库的 `update.json`，冷启动发一次 GET，关掉自动检查后只剩手动点「检查更新」
 - 权限只有三项：`USE_BIOMETRIC`、`INTERNET`、`REQUEST_INSTALL_PACKAGES`（后两项仅服务于在线更新）
 - `allowBackup="false"`，且 `data_extraction_rules` 排除全部域，云端备份与设备迁移均不带走数据
 - 指纹/面容由系统托管，应用不接触生物特征；PIN 与备份口令都只存派生结果
@@ -193,6 +203,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
-- 在线更新的「检查 → 下载 → 校验 → 调起安装器」还没在界面上跑通过：v0.1.0 的 release 包已经发布，但填地址这一步在测试 AVD 上做不了（拼音输入法把 `:` `/` `.` 打成全角），目前只用 curl 验证过下载地址本身可读
+- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」还没跑过，因为还没有第二个版本可下
+- 测试 AVD 所在网络直连 `raw.githubusercontent.com` 会卡到超时（本机是通过 127.0.0.1 的代理才拿到的），所以自动检查在国内网络下大概率静默失败；换镜像源还是接受这个限制，尚未定
 - 忘记 PIN 只能清除应用数据，唯一的出路是事先导出备份
 - 不支持预算、资产账户、周期记账、多账本、云同步、收入记录

@@ -37,6 +37,7 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val graph = rememberAppGraph()
     val settings by graph.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    val updateStatus by graph.updateController.status.collectAsStateWithLifecycle()
 
     val packageInfo = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0)
@@ -80,7 +81,12 @@ fun AboutScreen(onBack: () -> Unit) {
 
         Spacer(Modifier.height(12.dp))
 
-        UpdateSection(savedUrl = settings.updateSourceUrl)
+        UpdateSection(
+            savedUrl = settings.updateSourceUrl,
+            autoCheck = settings.autoUpdateCheck,
+            status = updateStatus,
+            installedVersion = versionName
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -101,7 +107,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
         SectionCard(title = "隐私") {
             BulletRow("账单、分类、备注、附件全部保存在本机，不上传服务器。")
-            BulletRow("唯一的联网动作是「检查更新」：只访问你自己填写的更新源地址，不点按钮就不发任何请求。")
+            BulletRow("联网只有一处：打开应用时向更新源读一份版本清单（默认是轻账自己的 GitHub 仓库），只发一个 GET 请求，不上传任何本机数据。不想要的话在「版本更新」里关掉自动检查。")
             BulletRow("应用不申请传统存储权限，导出与恢复都通过系统文件选择器完成。")
             BulletRow("没有任何统计埋点、广告 SDK 或第三方登录。")
         }

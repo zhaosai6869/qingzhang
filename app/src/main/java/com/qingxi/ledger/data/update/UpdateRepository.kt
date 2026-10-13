@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线更新：从用户在设置页填写的更新源拉取版本清单，下载 APK 并校验 SHA-256。
+ * 在线更新：拉取更新源清单（默认内置的 GitHub update.json，也允许用户换地址），下载 APK 并校验 SHA-256。
  * 只接受 https 地址，明文 http 一律拒绝（Android 默认也禁止明文流量）。
  */
 class UpdateRepository(private val app: AppGraph) {
@@ -136,8 +136,15 @@ class UpdateRepository(private val app: AppGraph) {
         )
     }
 
-    private companion object {
-        const val DIR_NAME = "update"
+    companion object {
+        /**
+         * 内置更新源：仓库 main 分支的 update.json。
+         * 每次发版都要同步这个文件里的 versionCode / apkUrl / sha256 / sizeBytes，否则自动检查发现不了新版本。
+         */
+        const val BUILT_IN_SOURCE_URL =
+            "https://raw.githubusercontent.com/zhaosai6869/qingzhang/main/update.json"
+
+        private const val DIR_NAME = "update"
         const val DIGEST_ALGORITHM = "SHA-256"
         const val SHA256_HEX_LENGTH = 64
         const val CONNECT_TIMEOUT_MILLIS = 15_000
