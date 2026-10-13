@@ -1,0 +1,14 @@
+.gradle/
+build/
+app/build/
+.kotlin/
+.idea/
+*.iml
+local.properties
+captures/
+
+# 发布签名材料，绝不入库
+keystore/
+keystore.properties
+
+.DS_Store

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#F5F6F8</color>
+    <color name="window_background">#F7F8FA</color>
+
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_stroke">#E5E8EC</color>
+    <color name="widget_text_primary">#1B1D21</color>
+    <color name="widget_text_secondary">#6B7280</color>
+    <color name="widget_expense">#C0392B</color>
+    <color name="widget_button_bg">#2E6BFF</color>
+    <color name="widget_button_text">#FFFFFF</color>
+</resources>

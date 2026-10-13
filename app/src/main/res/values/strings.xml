@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">轻账</string>
+    <string name="widget_today_label">今日支出</string>
+    <string name="widget_today_description">显示当天支出，点击「记一笔」直接进入记账。</string>
+</resources>
