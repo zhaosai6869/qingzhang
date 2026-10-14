@@ -1,17 +1,13 @@
 package com.qingxi.ledger.ui.flow
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,34 +34,24 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.qingxi.ledger.data.category.CategoryEntity
 import com.qingxi.ledger.data.tx.TransactionEntity
 import com.qingxi.ledger.di.appViewModel
+import com.qingxi.ledger.ui.common.SwipeableDeleteRow
 import com.qingxi.ledger.ui.theme.ExpenseRed
 import com.qingxi.ledger.util.Money
-import kotlinx.coroutines.launch
-
-/** 左滑露出的删除按钮宽度。 */
-private val DELETE_REVEAL_WIDTH = 84.dp
 
 /**
  * 账单流水页：月份翻页 + 当月汇总 + 按日分组列表 + 左滑露出删除按钮 + 长按多选批量删除。
@@ -127,24 +113,32 @@ fun FlowScreen(onRecord: () -> Unit, onEdit: (Long) -> Unit, onSearch: () -> Uni
                     }
                     items(items = group.items, key = { it.id }) { tx ->
                         val category = state.categoryById[tx.categoryId]
-                        SwipeableTransactionItem(
-                            tx = tx,
-                            category = category,
-                            selectionMode = state.selectionMode,
-                            checked = tx.id in state.selectedIds,
+                        SwipeableDeleteRow(
+                            resetKey = tx.id,
+                            swipeEnabled = !state.selectionMode,
+                            deleteLabel = "删除",
                             onClick = {
                                 if (state.selectionMode) viewModel.toggleSelection(tx.id) else onEdit(tx.id)
                             },
-                            onLongClick = {
-                                if (state.selectionMode) {
-                                    viewModel.toggleSelection(tx.id)
-                                } else {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.startSelection(tx.id)
-                                }
-                            },
                             onDelete = { pendingDelete = listOf(tx) }
-                        )
+                        ) { rowModifier, onRowClick ->
+                            TransactionRowItem(
+                                tx = tx,
+                                category = category,
+                                selectionMode = state.selectionMode,
+                                checked = tx.id in state.selectedIds,
+                                onClick = onRowClick,
+                                onLongClick = {
+                                    if (state.selectionMode) {
+                                        viewModel.toggleSelection(tx.id)
+                                    } else {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.startSelection(tx.id)
+                                    }
+                                },
+                                modifier = rowModifier
+                            )
+                        }
                     }
                 }
             }
@@ -160,95 +154,6 @@ fun FlowScreen(onRecord: () -> Unit, onEdit: (Long) -> Unit, onSearch: () -> Uni
                 pendingDelete = null
                 viewModel.deleteTransactions(targets)
             }
-        )
-    }
-}
-
-/**
- * 左滑单笔：滑到位后停住并露出「删除」按钮，点按钮才进入确认；
- * 未滑开时点击仍是进入编辑。多选模式下禁用滑动，避免与勾选冲突。
- */
-@Composable
-private fun SwipeableTransactionItem(
-    tx: TransactionEntity,
-    category: CategoryEntity?,
-    selectionMode: Boolean,
-    checked: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val density = LocalDensity.current
-    val revealWidth = with(density) { DELETE_REVEAL_WIDTH.toPx() }
-    val scope = rememberCoroutineScope()
-    val shift = remember { Animatable(0f) }
-    var revealed by remember { mutableStateOf(false) }
-    var dragAmount by remember { mutableFloatStateOf(0f) }
-
-    fun settle() {
-        val open = dragAmount <= -revealWidth * 0.55f
-        dragAmount = if (open) -revealWidth else 0f
-        revealed = open
-        scope.launch { shift.animateTo(dragAmount) }
-    }
-
-    LaunchedEffect(tx.id, selectionMode) {
-        shift.snapTo(0f)
-        dragAmount = 0f
-        revealed = false
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clipToBounds()
-            .pointerInput(selectionMode) {
-                if (selectionMode) return@pointerInput
-                detectHorizontalDragGestures(
-                    onDragStart = { dragAmount = shift.value },
-                    onHorizontalDrag = { _, delta ->
-                        dragAmount = (dragAmount + delta).coerceIn(-revealWidth, 0f)
-                        scope.launch { shift.snapTo(dragAmount) }
-                    },
-                    onDragEnd = { settle() },
-                    onDragCancel = { settle() }
-                )
-            }
-    ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = ExpenseRed,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(DELETE_REVEAL_WIDTH)
-                .clickable(enabled = revealed, onClickLabel = "删除这笔", onClick = onDelete)
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "删除",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White
-                )
-            }
-        }
-        TransactionRowItem(
-            tx = tx,
-            category = category,
-            selectionMode = selectionMode,
-            checked = checked,
-            onClick = {
-                if (revealed) {
-                    revealed = false
-                    dragAmount = 0f
-                    scope.launch { shift.animateTo(0f) }
-                } else {
-                    onClick()
-                }
-            },
-            onLongClick = onLongClick,
-            modifier = Modifier.fillMaxWidth().graphicsLayer { translationX = shift.value }
         )
     }
 }

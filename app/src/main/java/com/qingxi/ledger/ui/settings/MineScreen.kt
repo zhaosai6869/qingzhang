@@ -123,6 +123,13 @@ fun MineScreen(onNavigate: (String) -> Unit) {
                 )
                 ThinDivider()
                 SummaryRow(
+                    emoji = "🔁",
+                    title = "周期记账",
+                    summary = if (state.recurringRuleCount == 0) "未设置" else "${state.recurringRuleCount} 条规则",
+                    onClick = { onNavigate("recurring") }
+                )
+                ThinDivider()
+                SummaryRow(
                     emoji = "💾",
                     title = "备份与恢复",
                     summary = lastBackupLabel,

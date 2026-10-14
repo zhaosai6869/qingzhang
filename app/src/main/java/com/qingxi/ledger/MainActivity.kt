@@ -54,6 +54,7 @@ import com.qingxi.ledger.ui.flow.FlowScreen
 import com.qingxi.ledger.ui.flow.SearchScreen
 import com.qingxi.ledger.ui.lock.AppLockGate
 import com.qingxi.ledger.ui.lock.LockManager
+import com.qingxi.ledger.ui.recurring.RecurringScreen
 import com.qingxi.ledger.ui.record.RecordScreen
 import com.qingxi.ledger.ui.settings.AboutScreen
 import com.qingxi.ledger.ui.settings.BackupScreen
@@ -75,6 +76,7 @@ const val ROUTE_SEARCH = "search"
 const val ROUTE_RECORD = "record"
 const val ROUTE_RECORD_EDIT = "record/{editId}"
 const val ROUTE_CATEGORY_MANAGE = "category_manage"
+const val ROUTE_RECURRING = "recurring"
 const val ROUTE_BACKUP = "backup"
 const val ROUTE_LOCK_SETTINGS = "lock_settings"
 const val ROUTE_ABOUT = "about"
@@ -244,6 +246,7 @@ private fun QingJiRoot(
                 RecordScreen(editId = editId, onClose = { navController.popBackStack() })
             }
             composable(ROUTE_CATEGORY_MANAGE) { CategoryManageScreen(onBack = { navController.popBackStack() }) }
+            composable(ROUTE_RECURRING) { RecurringScreen(onBack = { navController.popBackStack() }) }
             composable(ROUTE_BACKUP) { BackupScreen(onBack = { navController.popBackStack() }) }
             composable(ROUTE_LOCK_SETTINGS) { LockSettingsScreen(onBack = { navController.popBackStack() }) }
             composable(ROUTE_ABOUT) { AboutScreen(onBack = { navController.popBackStack() }) }
