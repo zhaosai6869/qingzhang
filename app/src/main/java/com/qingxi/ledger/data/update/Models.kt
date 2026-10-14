@@ -15,6 +15,12 @@ data class UpdateInfo(
     val notes: String
 )
 
+/**
+ * 一个更新源。assetPrefix 非空时安装包也套同一个前缀：清单读得到不代表 GitHub 直链下得动，
+ * 两边尽量走同一条通路；SHA-256 仍然按清单里的值校验，镜像换包会被拦下。
+ */
+data class UpdateSource(val manifestUrl: String, val assetPrefix: String = "")
+
 sealed class UpdateStatus {
     /** 还没点过检查。 */
     data object Idle : UpdateStatus()

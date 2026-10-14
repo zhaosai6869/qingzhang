@@ -137,12 +137,31 @@ class UpdateRepository(private val app: AppGraph) {
     }
 
     companion object {
-        /**
-         * 内置更新源：仓库 main 分支的 update.json。
-         * 每次发版都要同步这个文件里的 versionCode / apkUrl / sha256 / sizeBytes，否则自动检查发现不了新版本。
-         */
-        const val BUILT_IN_SOURCE_URL =
+        private const val REPO_RAW_URL =
             "https://raw.githubusercontent.com/zhaosai6869/qingzhang/main/update.json"
+
+        /**
+         * 内置更新源候选：GitHub raw 在国内常常连不上，按顺序往后试镜像，任一读到就停。
+         * 每次发版都要同步 update.json 里的 versionCode / apkUrl / sha256 / sizeBytes，否则检查不到新版本。
+         */
+        val BUILT_IN_SOURCES = listOf(
+            UpdateSource(REPO_RAW_URL),
+            UpdateSource("https://gh-proxy.com/$REPO_RAW_URL", "https://gh-proxy.com/"),
+            UpdateSource("https://ghfast.top/$REPO_RAW_URL", "https://ghfast.top/"),
+            UpdateSource("https://cdn.jsdelivr.net/gh/zhaosai6869/qingzhang@main/update.json")
+        )
+
+        /** 只有 GitHub 直链才套镜像前缀，自定义源原样返回。 */
+        fun viaSource(info: UpdateInfo, source: UpdateSource): UpdateInfo =
+            if (source.assetPrefix.isEmpty() || !info.apkUrl.startsWith("https://github.com/")) info
+            else info.copy(apkUrl = source.assetPrefix + info.apkUrl)
+
+        /**
+         * 单个源的总耗时预算。`connectTimeout` 约束的是「一次 connect」而不是「一次请求」：
+         * OkHttp 会对解析出的每个地址各试一遍，DNS 解析本身还没有时限，
+         * 所以卡住的源必须由这个预算放弃等待，否则排在后面的镜像永远走不到。
+         */
+        const val SOURCE_ATTEMPT_TIMEOUT_MILLIS = 12_000L
 
         private const val DIR_NAME = "update"
         const val DIGEST_ALGORITHM = "SHA-256"

@@ -96,6 +96,8 @@ fun UpdateSection(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { viewModel.saveSourceUrl(customUrl) }
             ) { Text("保存自定义地址") }
+            Spacer(Modifier.height(6.dp))
+            NoteText("自定义地址只试这一个，不再回退内置源；清空即回到内置。")
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

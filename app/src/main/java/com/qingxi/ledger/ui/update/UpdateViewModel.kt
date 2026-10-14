@@ -26,7 +26,7 @@ class UpdateViewModel(private val graph: AppGraph) : ViewModel() {
     fun installedVersionName(): String = controller.installedVersionName()
 
     fun sourceLabel(savedUrl: String): String =
-        if (savedUrl.isBlank()) "内置（轻账 GitHub 仓库）" else savedUrl
+        if (savedUrl.isBlank()) "内置（GitHub 主源，连不上时依次试镜像）" else savedUrl
 
     fun setAutoCheck(enabled: Boolean) {
         viewModelScope.launch { graph.settings.setAutoUpdateCheck(enabled) }

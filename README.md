@@ -1,6 +1,6 @@
 # 轻账 · QingJi
 
-离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，可以在「关于」页关掉。
+离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，连不上时依次改走公开镜像读同一份文件，可以在「关于」页关掉。
 
 包名 `com.qingxi.ledger`，当前版本 `0.1.0`（versionCode 1）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
@@ -34,8 +34,10 @@
 
 **在线更新**
 - 更新源内置（本仓库 `update.json`），不用填地址；打开应用后自动检查一次，发现新版本在「我的 → 关于」上标出来
+- 内置地址按候选顺序依次试：`raw.githubusercontent.com` → `gh-proxy.com` → `ghfast.top` → `jsDelivr`，任一读到就停；命中镜像时安装包也走同一镜像，SHA-256 照旧校验
+- 每个源最多等 12 秒：`connectTimeout` 约束的是「一次 connect」而不是「一次请求」（DNS 无时限，OkHttp 还会对解析出的每个地址各试一遍），卡住的源由这个时限放弃等待，否则备胎永远走不到；四个全挂最坏约 48 秒，后台静默进行
 - 不想自动联网就在「关于 → 版本更新」里关掉「打开应用时自动检查」，关掉后仍可手动点「检查更新」
-- 也支持自定义更新源地址（高级项，默认收起），填了就走自己的源
+- 也支持自定义更新源地址（高级项，默认收起），填了只试这一个、不再回退内置，清空即回到内置
 - 清单比对 `versionCode`，有新版则下载 APK 到应用缓存，SHA-256 校验通过后调起系统安装器
 - 只接受 https 地址；缺 `sha256` 的清单直接拒绝，不安装无校验值的包
 
@@ -135,6 +137,8 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 3. 用 release 资产的直链和 `sha256sum app-release.apk` 的结果改写根目录 `update.json`
 4. 提交并 push `update.json`——push 之前 `https://raw.githubusercontent.com/.../main/update.json` 还是旧内容
 
+内置的三级镜像只是代理同一个 raw URL，不需要为它们上传第二份文件、也不需要在镜像侧做任何操作；`update.json` push 上去它们就能读到。唯一例外是 `jsDelivr` 对 `@main` 有约一天的缓存，极端情况下新版本要晚一天才被发现。
+
 ## 数据与存储
 
 | 内容 | 位置 |
@@ -161,7 +165,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 
 ## 更新源格式
 
-更新源是一份 **https** JSON 清单。默认地址是仓库根目录的 `update.json`（`https://raw.githubusercontent.com/zhaosai6869/qingzhang/main/update.json`），用户也可以在「关于 → 版本更新」里换成自己托管的地址（对象存储、Releases 直链、静态站都行）：
+更新源是一份 **https** JSON 清单。默认地址是仓库根目录的 `update.json`（`https://raw.githubusercontent.com/zhaosai6869/qingzhang/main/update.json`，连不上时依次改走 `gh-proxy.com`、`ghfast.top`、`jsDelivr` 三个公开镜像读同一份文件），用户也可以在「关于 → 版本更新」里换成自己托管的地址（对象存储、Releases 直链、静态站都行，填了只试这一个、不回退内置）：
 
 ```json
 {
@@ -178,11 +182,11 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 - `sha256` 必填且必须是 64 位十六进制，缺失或格式不对就判定清单非法；下载完成后摘要不一致会删掉文件并报错
 - `apkUrl` 同样只接受 https；`sizeBytes`、`notes` 可省略
 - 发布时算校验值：`sha256sum app-release-0.2.0.apk`
-- 下载走 `HttpURLConnection`，连接超时 15s、读取超时 30s，清单大小上限 256KB
+- 下载走 `HttpURLConnection`，连接超时 15s、读取超时 30s，清单大小上限 256KB；读清单另有 12s 的**每源总时限**，因为上面两个超时都管不到 DNS 与逐地址重试
 
 ## 隐私与安全
 
-- 账单数据不上传、不采集、不上报；联网只有「读版本清单」一处，默认地址是本仓库的 `update.json`，冷启动发一次 GET，关掉自动检查后只剩手动点「检查更新」
+- 账单数据不上传、不采集、不上报；联网只有「读版本清单」一处，默认地址是本仓库的 `update.json`，连不上时按候选顺序最多再问三个公开镜像，读的仍是同一份文件，关掉自动检查后只剩手动点「检查更新」
 - 权限只有三项：`USE_BIOMETRIC`、`INTERNET`、`REQUEST_INSTALL_PACKAGES`（后两项仅服务于在线更新）
 - `allowBackup="false"`，且 `data_extraction_rules` 排除全部域，云端备份与设备迁移均不带走数据
 - 指纹/面容由系统托管，应用不接触生物特征；PIN 与备份口令都只存派生结果
@@ -204,6 +208,8 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
 - 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」还没跑过，因为还没有第二个版本可下
-- 测试 AVD 所在网络直连 `raw.githubusercontent.com` 会卡到超时（本机是通过 127.0.0.1 的代理才拿到的），所以自动检查在国内网络下大概率静默失败；换镜像源还是接受这个限制，尚未定
+- 内置源的回退链路只验证了「读不通就放弃」这一半：四个候选各等 12 秒后被放弃、界面回到「检查更新」，取消也能中断；「主源超时后由镜像读成功」这半还没跑过——验证时那台 AVD 整机没有外网（IP ping 与 DNS 都不通），拿不到任何一条成功响应
+- `repository.download()` 仍是「一次 connect 打断不了」的老形状：下载阶段的取消要等各地址的 `connectTimeout`（15 秒）逐个走完，比检查阶段更拖
+- jsDelivr 备胎对 `@main` 有约一天缓存，极端情况下会晚一天才发现新版本
 - 忘记 PIN 只能清除应用数据，唯一的出路是事先导出备份
 - 不支持预算、资产账户、周期记账、多账本、云同步、收入记录
