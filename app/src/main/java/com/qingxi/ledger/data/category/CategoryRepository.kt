@@ -1,11 +1,13 @@
 package com.qingxi.ledger.data.category
 
+import com.qingxi.ledger.data.recurring.RecurringRuleDao
 import com.qingxi.ledger.data.tx.TransactionDao
 import kotlinx.coroutines.flow.Flow
 
 class CategoryRepository(
     private val dao: CategoryDao,
-    private val transactionDao: TransactionDao
+    private val transactionDao: TransactionDao,
+    private val recurringRuleDao: RecurringRuleDao
 ) {
 
     fun observeAll(): Flow<List<CategoryEntity>> = dao.observeAll()
@@ -29,15 +31,17 @@ class CategoryRepository(
 
     suspend fun update(entity: CategoryEntity) = dao.update(entity)
 
-    /** 删除自定义分类；已有账单改挂到“其他”分类上。 */
+    /** 删除自定义分类；已有账单改挂到“其他”分类上，周期规则跟着同一策略走。 */
     suspend fun delete(entity: CategoryEntity) {
         if (entity.isSystem) return
         val fallback = dao.getAll().firstOrNull { it.kind == entity.kind && it.name == "其他" }
             ?: dao.getAll().firstOrNull { it.kind == entity.kind && it.id != entity.id }
         if (fallback != null) {
             transactionDao.reassignCategory(entity.id, fallback.id)
+            recurringRuleDao.reassignCategory(entity.id, fallback.id)
         } else {
             transactionDao.deleteByCategory(entity.id)
+            recurringRuleDao.deleteByCategory(entity.id)
         }
         dao.delete(entity)
     }

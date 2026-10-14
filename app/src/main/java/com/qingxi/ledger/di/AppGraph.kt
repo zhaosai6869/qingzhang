@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qingxi.ledger.data.category.CategoryRepository
 import com.qingxi.ledger.data.db.AppDatabase
+import com.qingxi.ledger.data.recurring.RecurringRepository
 import com.qingxi.ledger.data.settings.SettingsRepository
 import com.qingxi.ledger.data.tx.TransactionRepository
 import com.qingxi.ledger.data.update.UpdateController
@@ -25,8 +26,12 @@ class AppGraph private constructor(private val context: Context) {
 
     val transactions: TransactionRepository by lazy { TransactionRepository(database.transactionDao()) }
 
+    val recurrences: RecurringRepository by lazy {
+        RecurringRepository(database.recurringRuleDao(), database.recurringDismissalDao())
+    }
+
     val categories: CategoryRepository by lazy {
-        CategoryRepository(database.categoryDao(), database.transactionDao())
+        CategoryRepository(database.categoryDao(), database.transactionDao(), database.recurringRuleDao())
     }
 
     val settings: SettingsRepository by lazy { SettingsRepository(context) }

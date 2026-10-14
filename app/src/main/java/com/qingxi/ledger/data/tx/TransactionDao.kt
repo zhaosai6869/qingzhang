@@ -3,6 +3,7 @@ package com.qingxi.ledger.data.tx
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -14,7 +15,15 @@ const val ORIGIN_VOICE = 1
 const val ORIGIN_OCR = 2
 const val ORIGIN_RECOGNIZED = 3
 
-@Entity(tableName = "transactions")
+/**
+ * `ruleId` + `dueDayKey` 是周期入账的幂等键：同一条规则的同一天只可能存在一条流水，
+ * 重复确认、恢复备份后再确认都被唯一索引拦住。手工记录的这两列为 NULL，
+ * SQLite 里 NULL 互不相等，所以不会互相冲突。
+ */
+@Entity(
+    tableName = "transactions",
+    indices = [Index(value = ["ruleId", "dueDayKey"], unique = true)]
+)
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val kind: Int,
@@ -25,7 +34,9 @@ data class TransactionEntity(
     val timeMillis: Long,
     val createdAtMillis: Long,
     val attachments: String = "",
-    val origin: Int = ORIGIN_MANUAL
+    val origin: Int = ORIGIN_MANUAL,
+    val ruleId: Long? = null,
+    val dueDayKey: String? = null
 )
 
 data class DayTotal(

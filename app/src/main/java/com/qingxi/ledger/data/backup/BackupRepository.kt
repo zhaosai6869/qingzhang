@@ -10,6 +10,10 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.qingxi.ledger.data.category.CategoryEntity
 import com.qingxi.ledger.data.db.AppDatabase
+import com.qingxi.ledger.data.recurring.END_NEVER
+import com.qingxi.ledger.data.recurring.REPEAT_MONTHLY
+import com.qingxi.ledger.data.recurring.RecurringDismissalEntity
+import com.qingxi.ledger.data.recurring.RecurringRuleEntity
 import com.qingxi.ledger.data.tx.TransactionEntity
 import com.qingxi.ledger.di.AppGraph
 import com.qingxi.ledger.util.CENTS_PER_YUAN
@@ -30,7 +34,7 @@ data class BackupFile(val name: String, val millis: Long, val sizeBytes: Long, v
 data class BackupInfo(val version: Int, val exportedAtMillis: Long, val transactionCount: Int, val categoryCount: Int)
 
 private const val TAG = "QingJiBackup"
-private const val BACKUP_VERSION = 1
+private const val BACKUP_VERSION = 2
 private const val BACKUP_APP = "qingji"
 private const val DIR_NAME = "backup"
 private const val ENCRYPTED_EXTENSION = "qjbak"
@@ -92,6 +96,41 @@ class BackupRepository(private val app: AppGraph) {
                         addProperty("createdAtMillis", entity.createdAtMillis)
                         addProperty("attachments", entity.attachments)
                         addProperty("origin", entity.origin)
+                        entity.ruleId?.let { addProperty("ruleId", it) }
+                        entity.dueDayKey?.takeIf { it.isNotEmpty() }?.let { addProperty("dueDayKey", it) }
+                    }
+                )
+            }
+        }
+        val rules = JsonArray().apply {
+            app.recurrences.exportRules().forEach { rule ->
+                add(
+                    JsonObject().apply {
+                        addProperty("id", rule.id)
+                        addProperty("categoryId", rule.categoryId)
+                        addProperty("amountMinor", rule.amountMinor)
+                        addProperty("note", rule.note)
+                        addProperty("tags", rule.tags)
+                        addProperty("repeatType", rule.repeatType)
+                        addProperty("weekdays", rule.weekdays)
+                        addProperty("dayOfMonth", rule.dayOfMonth)
+                        addProperty("startMillis", rule.startMillis)
+                        addProperty("endType", rule.endType)
+                        addProperty("endMillis", rule.endMillis)
+                        addProperty("totalCount", rule.totalCount)
+                        addProperty("enabled", rule.enabled)
+                        addProperty("createdMillis", rule.createdMillis)
+                    }
+                )
+            }
+        }
+        val dismissals = JsonArray().apply {
+            app.recurrences.exportDismissals().forEach { dismissal ->
+                add(
+                    JsonObject().apply {
+                        addProperty("ruleId", dismissal.ruleId)
+                        addProperty("dueDayKey", dismissal.dueDayKey)
+                        addProperty("dismissedMillis", dismissal.dismissedMillis)
                     }
                 )
             }
@@ -102,6 +141,8 @@ class BackupRepository(private val app: AppGraph) {
             addProperty("exportedAt", System.currentTimeMillis())
             add("categories", categories)
             add("transactions", transactions)
+            add("rules", rules)
+            add("dismissals", dismissals)
         }
         prettyGson.toJson(root)
     }
@@ -182,7 +223,10 @@ class BackupRepository(private val app: AppGraph) {
         if (!root.has("transactions")) return@withContext ImportResult(0, 0)
         val categoryDao = AppDatabase.instance.categoryDao()
 
-        if (mode == ImportMode.REPLACE) app.transactions.deleteAll()
+        if (mode == ImportMode.REPLACE) {
+            app.transactions.deleteAll()
+            app.recurrences.deleteAllRules()
+        }
 
         val existingCategories = app.categories.all()
         val existingCategoryIds = existingCategories.map { it.id }.toHashSet()
@@ -230,6 +274,38 @@ class BackupRepository(private val app: AppGraph) {
             entities.add(entity)
         }
         if (entities.isNotEmpty()) app.transactions.insertAll(entities)
+
+        // 旧版本备份没有这两段，缺段只当「没有周期规则」，恢复照常。
+        val existingRuleIds = app.recurrences.exportRules().map { it.id }.toHashSet()
+        val keepRuleIds = mode == ImportMode.REPLACE
+        val pendingRules = mutableListOf<Pair<Long, RecurringRuleEntity>>()
+        root.optArray("rules").forEach { element ->
+            val source = element.asObjectOrNull() ?: return@forEach
+            val sourceId = source.optLong("id")
+            val entity = source.toRecurringRuleEntity(keepId = keepRuleIds) ?: return@forEach
+            if (sourceId <= 0L) return@forEach
+            if (mode == ImportMode.MERGE && sourceId in existingRuleIds) return@forEach
+            pendingRules += sourceId to entity
+        }
+        // 合并导入会重新发号，跳过记录得跟着改指向，否则 ruleId 会指到别的规则上。
+        val ruleIdMap = pendingRules.associate { (sourceId, entity) ->
+            sourceId to app.recurrences.insertRule(entity)
+        }
+
+        val dismissalEntities = mutableListOf<RecurringDismissalEntity>()
+        root.optArray("dismissals").forEach { element ->
+            val json = element.asObjectOrNull() ?: return@forEach
+            val sourceRuleId = json.optLong("ruleId")
+            val dueDayKey = json.optString("dueDayKey")
+            if (sourceRuleId <= 0L || dueDayKey.isEmpty()) return@forEach
+            val mappedRuleId = ruleIdMap[sourceRuleId] ?: sourceRuleId
+            if (mappedRuleId <= 0L) return@forEach
+            dismissalEntities.add(
+                RecurringDismissalEntity(mappedRuleId, dueDayKey, json.optLong("dismissedMillis"))
+            )
+        }
+        if (dismissalEntities.isNotEmpty()) app.recurrences.insertDismissals(dismissalEntities)
+
         refreshTodayWidgets(app.appContext)
         ImportResult(entities.size, skipped)
     }
@@ -260,6 +336,7 @@ class BackupRepository(private val app: AppGraph) {
         1 -> "语音"
         2 -> "拍照识别"
         3 -> "识别"
+        4 -> "周期"
         else -> "手动"
     }
 
@@ -268,6 +345,8 @@ class BackupRepository(private val app: AppGraph) {
         val amount = optLong("amountMinor")
         if (time <= 0L || amount < 0L) return null
         val created = optLong("createdAtMillis")
+        val ruleId = optLong("ruleId")
+        val dueDayKey = optString("dueDayKey")
         return TransactionEntity(
             id = if (keepId) optLong("id") else 0L,
             kind = optInt("kind").takeIf { it == 1 || it == 2 } ?: 1,
@@ -278,7 +357,35 @@ class BackupRepository(private val app: AppGraph) {
             timeMillis = time,
             createdAtMillis = if (created > 0L) created else time,
             attachments = optString("attachments"),
-            origin = optInt("origin")
+            origin = optInt("origin"),
+            ruleId = ruleId.takeIf { it > 0L },
+            dueDayKey = dueDayKey.takeIf { it.isNotEmpty() }
+        )
+    }
+
+    /** 频率与结束条件都按原始 int 存，非法值当无限/每月处理，不让一份坏备份把导入流程卡死。 */
+    private fun JsonObject.toRecurringRuleEntity(keepId: Boolean): RecurringRuleEntity? {
+        val start = optLong("startMillis")
+        val amount = optLong("amountMinor")
+        if (start <= 0L || amount <= 0L) return null
+        val repeatType = optInt("repeatType").takeIf { it in 0..2 } ?: REPEAT_MONTHLY
+        val endType = optInt("endType").takeIf { it in 0..2 } ?: END_NEVER
+        val created = optLong("createdMillis")
+        return RecurringRuleEntity(
+            id = if (keepId) optLong("id") else 0L,
+            categoryId = optLong("categoryId"),
+            amountMinor = amount,
+            note = optString("note"),
+            tags = optString("tags"),
+            repeatType = repeatType,
+            weekdays = optString("weekdays"),
+            dayOfMonth = optInt("dayOfMonth").coerceIn(1, 31),
+            startMillis = start,
+            endType = endType,
+            endMillis = optLong("endMillis"),
+            totalCount = optInt("totalCount").coerceAtLeast(0),
+            enabled = has("enabled").not() || optBoolean("enabled"),
+            createdMillis = if (created > 0L) created else start
         )
     }
 
