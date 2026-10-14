@@ -17,6 +17,27 @@ object Dates {
 
     fun endOfDay(millis: Long): Long = startOfDay(millis) + MILLIS_PER_DAY - 1
 
+    /** 次日的零点：走日历而不是加 24 小时，跨夏令时的地区才不会偏移。 */
+    fun nextDay(millis: Long): Long = calendarOf(millis).let {
+        it.add(Calendar.DAY_OF_MONTH, 1)
+        startOfDay(it.timeInMillis)
+    }
+
+    /** 当天的正午，用来给「补记往期的周期支出」挑一个不突兀的时间。 */
+    fun middayOf(millis: Long): Long = calendarOf(millis).let {
+        it.set(Calendar.HOUR_OF_DAY, 12)
+        it.set(Calendar.MINUTE, 0)
+        it.set(Calendar.SECOND, 0)
+        it.set(Calendar.MILLISECOND, 0)
+        it.timeInMillis
+    }
+
+    /** ISO 星期：1=周一 … 7=周日。 */
+    fun isoWeekdayOf(millis: Long): Int = when (calendarOf(millis).get(Calendar.DAY_OF_WEEK)) {
+        Calendar.SUNDAY -> 7
+        else -> calendarOf(millis).get(Calendar.DAY_OF_WEEK) - 1
+    }
+
     fun startOfMonth(year: Int, month: Int): Long = calendarOf(0L).let {
         it.clear()
         it.set(year, month - 1, 1, 0, 0, 0)
@@ -99,15 +120,17 @@ object Dates {
 
     fun dayLabel(millis: Long): String {
         val diffDays = ((startOfDay(System.currentTimeMillis()) - startOfDay(millis)) / MILLIS_PER_DAY).toInt()
-        val prefix = when (diffDays) {
-            0 -> "今天"
-            1 -> "昨天"
-            else -> ""
+        val datePart = monthDayLabel(millis)
+        return when (diffDays) {
+            0 -> "今天 · $datePart"
+            1 -> "昨天 · $datePart"
+            else -> datePart
         }
-        val datePart = calendarOf(millis).let {
-            String.format(Locale.US, "%d月%d日", it.get(Calendar.MONTH) + 1, it.get(Calendar.DAY_OF_MONTH))
-        }
-        return if (prefix.isEmpty()) datePart else "$prefix · $datePart"
+    }
+
+    /** 纯日期「10月13日」，用于句子拼接，免得和「·」分隔的短语混在一起。 */
+    fun monthDayLabel(millis: Long): String = calendarOf(millis).let {
+        String.format(Locale.US, "%d月%d日", it.get(Calendar.MONTH) + 1, it.get(Calendar.DAY_OF_MONTH))
     }
 
     fun weekdayLabel(millis: Long): String = when (calendarOf(millis).get(Calendar.DAY_OF_WEEK)) {

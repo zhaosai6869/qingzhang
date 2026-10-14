@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Update
@@ -109,6 +110,14 @@ interface TransactionDao {
 
     @Insert
     suspend fun insert(entity: TransactionEntity): Long
+
+    /** 周期入账专用：撞上 (ruleId, dueDayKey) 唯一索引就当没发生过，不报错也不重复记账。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnoringConflict(entity: TransactionEntity): Long
+
+    /** 已入账的周期项幂等键，形如 `12|2026-10-15`；一次读全量再在内存里分组。 */
+    @Query("SELECT ruleId || '|' || dueDayKey FROM transactions WHERE ruleId IS NOT NULL AND dueDayKey IS NOT NULL")
+    suspend fun recurringKeys(): List<String>
 
     @Insert
     suspend fun insertAll(entities: List<TransactionEntity>)

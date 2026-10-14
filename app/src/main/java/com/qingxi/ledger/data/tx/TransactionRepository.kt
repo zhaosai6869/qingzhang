@@ -19,6 +19,11 @@ class TransactionRepository(private val dao: TransactionDao) {
 
     suspend fun insert(entity: TransactionEntity): Long = dao.insert(entity)
 
+    /** 幂等写入：同一规则同一天重复确认只留第一次，返回 -1 表示已被拦住。 */
+    suspend fun insertIgnoringConflict(entity: TransactionEntity): Long = dao.insertIgnoringConflict(entity)
+
+    suspend fun recurringKeys(): List<String> = dao.recurringKeys()
+
     suspend fun insertAll(entities: List<TransactionEntity>) = dao.insertAll(entities)
 
     suspend fun update(entity: TransactionEntity) = dao.update(entity)

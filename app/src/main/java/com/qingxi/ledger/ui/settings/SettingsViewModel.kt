@@ -19,6 +19,7 @@ data class MineUiState(
     val monthExpenseMinor: Long = 0L,
     val categoryCount: Int = 0,
     val recurringRuleCount: Int = 0,
+    val recurringPendingCount: Int = 0,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val palette: ThemePalette = ThemePalette.BLUE,
     val monthLabel: String = "本月"
@@ -37,8 +38,9 @@ class SettingsViewModel(private val graph: AppGraph) : ViewModel() {
         graph.transactions.observeExpenses(),
         graph.categories.observeExpenses(),
         graph.recurrences.observeRules(),
+        graph.pending.items,
         graph.settings.settings
-    ) { expenses, categories, rules, appSettings ->
+    ) { expenses, categories, rules, pending, appSettings ->
         val now = System.currentTimeMillis()
         val (year, month) = Dates.periodOf(now, appSettings.monthStartDay)
         val start = Dates.periodStart(year, month, appSettings.monthStartDay)
@@ -49,6 +51,7 @@ class SettingsViewModel(private val graph: AppGraph) : ViewModel() {
             monthExpenseMinor = graph.transactions.sumExpense(start, end),
             categoryCount = categories.size,
             recurringRuleCount = rules.size,
+            recurringPendingCount = pending.size,
             themeMode = appSettings.themeMode,
             palette = appSettings.palette,
             monthLabel = Dates.periodLabel(year, month, appSettings.monthStartDay)

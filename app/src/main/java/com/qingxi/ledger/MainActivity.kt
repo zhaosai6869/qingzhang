@@ -54,8 +54,9 @@ import com.qingxi.ledger.ui.flow.FlowScreen
 import com.qingxi.ledger.ui.flow.SearchScreen
 import com.qingxi.ledger.ui.lock.AppLockGate
 import com.qingxi.ledger.ui.lock.LockManager
-import com.qingxi.ledger.ui.recurring.RecurringScreen
 import com.qingxi.ledger.ui.record.RecordScreen
+import com.qingxi.ledger.ui.recurring.RecurringPendingScreen
+import com.qingxi.ledger.ui.recurring.RecurringScreen
 import com.qingxi.ledger.ui.settings.AboutScreen
 import com.qingxi.ledger.ui.settings.BackupScreen
 import com.qingxi.ledger.ui.settings.CategoryManageScreen
@@ -77,6 +78,7 @@ const val ROUTE_RECORD = "record"
 const val ROUTE_RECORD_EDIT = "record/{editId}"
 const val ROUTE_CATEGORY_MANAGE = "category_manage"
 const val ROUTE_RECURRING = "recurring"
+const val ROUTE_RECURRING_PENDING = "recurring_pending"
 const val ROUTE_BACKUP = "backup"
 const val ROUTE_LOCK_SETTINGS = "lock_settings"
 const val ROUTE_ABOUT = "about"
@@ -145,6 +147,8 @@ private fun QingJiRoot(
     // 解锁之后（即真正进入应用）才检查更新，控制器内部保证一个进程只发一次请求。
     val graph = LocalAppGraph.current
     LaunchedEffect(Unit) { graph.updateController.autoCheckOnColdStart() }
+    // 周期支出同样只在冷启动补算一次：后台没有闹钟，回到前台也不会冒出新的待确认项。
+    LaunchedEffect(Unit) { graph.pending.refreshOnColdStart() }
 
     LaunchedEffect(openRecord) {
         if (openRecord) {
@@ -184,7 +188,8 @@ private fun QingJiRoot(
                 FlowScreen(
                     onRecord = { navController.navigate(ROUTE_RECORD) },
                     onEdit = { id -> navController.navigate("$ROUTE_RECORD/$id") },
-                    onSearch = { navController.navigate(ROUTE_SEARCH) }
+                    onSearch = { navController.navigate(ROUTE_SEARCH) },
+                    onOpenPending = { navController.navigate(ROUTE_RECURRING_PENDING) }
                 )
             }
             composable(ROUTE_CALENDAR) {
@@ -246,7 +251,15 @@ private fun QingJiRoot(
                 RecordScreen(editId = editId, onClose = { navController.popBackStack() })
             }
             composable(ROUTE_CATEGORY_MANAGE) { CategoryManageScreen(onBack = { navController.popBackStack() }) }
-            composable(ROUTE_RECURRING) { RecurringScreen(onBack = { navController.popBackStack() }) }
+            composable(ROUTE_RECURRING) {
+                RecurringScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPending = { navController.navigate(ROUTE_RECURRING_PENDING) }
+                )
+            }
+            composable(ROUTE_RECURRING_PENDING) {
+                RecurringPendingScreen(onBack = { navController.popBackStack() })
+            }
             composable(ROUTE_BACKUP) { BackupScreen(onBack = { navController.popBackStack() }) }
             composable(ROUTE_LOCK_SETTINGS) { LockSettingsScreen(onBack = { navController.popBackStack() }) }
             composable(ROUTE_ABOUT) { AboutScreen(onBack = { navController.popBackStack() }) }

@@ -9,6 +9,10 @@ class RecurringRepository(
 
     fun observeRules(): Flow<List<RecurringRuleEntity>> = ruleDao.observeAll()
 
+    suspend fun enabledRules(): List<RecurringRuleEntity> = ruleDao.enabledRules()
+
+    suspend fun dismissedKeys(): List<String> = dismissalDao.keys()
+
     fun observeEnabledCount(): Flow<Int> = ruleDao.observeEnabledCount()
 
     suspend fun getRule(id: Long): RecurringRuleEntity? = ruleDao.getById(id)

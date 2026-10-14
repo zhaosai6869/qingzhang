@@ -50,14 +50,15 @@ import kotlinx.coroutines.launch
 
 /**
  * 周期记账规则列表：规则本身不等于已发生的支出，
- * 到期项要在流水页确认后才会写进账单，所以这里只管规则，不显示任何金额合计。
+ * 到期项要经过待确认清单才会写进账单，所以这里只管规则，最多挂一条待确认入口。
  */
 @Composable
-fun RecurringScreen(onBack: () -> Unit) {
+fun RecurringScreen(onBack: () -> Unit, onOpenPending: () -> Unit) {
     val graph = LocalAppGraph.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val rules by graph.recurrences.observeRules().collectAsStateWithLifecycle(initialValue = emptyList())
+    val pending by graph.pending.items.collectAsStateWithLifecycle()
     val categories by graph.categories.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val expenseCategories by graph.categories.observeExpenses().collectAsStateWithLifecycle(initialValue = emptyList())
     val knownTags by produceState(initialValue = emptyList<String>(), graph) {
@@ -72,9 +73,17 @@ fun RecurringScreen(onBack: () -> Unit) {
 
     SubPageShell(title = "周期记账", onBack = onBack, snackbarHostState = snackbarHostState) {
         NoteText(
-            text = "到期当天在流水页列出，确认后才记账；改规则不会动已经入账的流水。",
+            text = "到期项会在流水页顶部列出，确认后才记账；改规则不会动已经入账的流水。",
             modifier = Modifier.padding(bottom = 12.dp)
         )
+        if (pending.isNotEmpty()) {
+            PendingRecurringBanner(
+                count = pending.size,
+                totalMinor = pending.sumOf { it.amountMinor },
+                onClick = onOpenPending,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
         Surface(
             shape = RoundedCornerShape(14.dp),
             color = MaterialTheme.colorScheme.primary,

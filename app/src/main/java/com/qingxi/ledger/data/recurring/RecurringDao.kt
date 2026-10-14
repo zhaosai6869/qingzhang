@@ -20,6 +20,10 @@ interface RecurringRuleDao {
     @Query("SELECT * FROM recurring_rules WHERE id = :id")
     suspend fun getById(id: Long): RecurringRuleEntity?
 
+    /** 算到期项用的一次性读取，只关心启用的规则。 */
+    @Query("SELECT * FROM recurring_rules WHERE enabled = 1 ORDER BY startMillis ASC, id ASC")
+    suspend fun enabledRules(): List<RecurringRuleEntity>
+
     @Query("SELECT COUNT(*) FROM recurring_rules")
     suspend fun count(): Int
 
@@ -57,6 +61,9 @@ interface RecurringDismissalDao {
     /** 一次读全部再在内存里比对：跳过记录只会在「确认清单」上产生，量级很小。 */
     @Query("SELECT ruleId || '|' || dueDayKey FROM recurring_dismissals")
     fun observeKeys(): Flow<List<String>>
+
+    @Query("SELECT ruleId || '|' || dueDayKey FROM recurring_dismissals")
+    suspend fun keys(): List<String>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entity: RecurringDismissalEntity)

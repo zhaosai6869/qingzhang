@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qingxi.ledger.data.category.CategoryRepository
 import com.qingxi.ledger.data.db.AppDatabase
+import com.qingxi.ledger.data.recurring.RecurringPendingStore
 import com.qingxi.ledger.data.recurring.RecurringRepository
 import com.qingxi.ledger.data.settings.SettingsRepository
 import com.qingxi.ledger.data.tx.TransactionRepository
@@ -29,6 +30,9 @@ class AppGraph private constructor(private val context: Context) {
     val recurrences: RecurringRepository by lazy {
         RecurringRepository(database.recurringRuleDao(), database.recurringDismissalDao())
     }
+
+    /** 冷启动算出来的到期项，进程内有效，确认后才会变成流水。 */
+    val pending: RecurringPendingStore by lazy { RecurringPendingStore(this) }
 
     val categories: CategoryRepository by lazy {
         CategoryRepository(database.categoryDao(), database.transactionDao(), database.recurringRuleDao())

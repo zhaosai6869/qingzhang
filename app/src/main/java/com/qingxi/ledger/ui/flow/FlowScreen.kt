@@ -44,29 +44,41 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.qingxi.ledger.data.tx.TransactionEntity
+import com.qingxi.ledger.di.LocalAppGraph
 import com.qingxi.ledger.di.appViewModel
 import com.qingxi.ledger.ui.common.SwipeableDeleteRow
+import com.qingxi.ledger.ui.recurring.PendingRecurringBanner
 import com.qingxi.ledger.ui.theme.ExpenseRed
 import com.qingxi.ledger.util.Money
 
 /**
  * 账单流水页：月份翻页 + 当月汇总 + 按日分组列表 + 左滑露出删除按钮 + 长按多选批量删除。
  * 所有删除都要二次确认，确认后不可撤销。
+ * 顶部「待确认的周期支出」横幅由冷启动算出来的到期项驱动，确认后才变成流水。
  * 悬浮「记一笔」按钮由导航壳底栏提供，本页不再放 FAB。
  *
  * @param onRecord 跳转记一笔。
  * @param onEdit 点击某笔账单进入编辑。
  * @param onSearch 跳转搜索筛选页。
+ * @param onOpenPending 跳转周期支出的待确认清单。
  */
 @Composable
-fun FlowScreen(onRecord: () -> Unit, onEdit: (Long) -> Unit, onSearch: () -> Unit) {
+fun FlowScreen(
+    onRecord: () -> Unit,
+    onEdit: (Long) -> Unit,
+    onSearch: () -> Unit,
+    onOpenPending: () -> Unit
+) {
     val viewModel = appViewModel<FlowViewModel>()
+    val graph = LocalAppGraph.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.uiMessage.collectAsStateWithLifecycle()
+    val pending by graph.pending.items.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
     var pendingDelete by remember { mutableStateOf<List<TransactionEntity>?>(null) }
@@ -90,7 +102,7 @@ fun FlowScreen(onRecord: () -> Unit, onEdit: (Long) -> Unit, onSearch: () -> Uni
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         val topPadding = innerPadding.calculateTopPadding()
-        if (state.isEmpty) {
+        if (state.isEmpty && pending.isEmpty()) {
             FlowEmptyState(
                 onRecord = onRecord,
                 modifier = Modifier
@@ -107,6 +119,20 @@ fun FlowScreen(onRecord: () -> Unit, onEdit: (Long) -> Unit, onSearch: () -> Uni
                     bottom = innerPadding.calculateBottomPadding() + 80.dp
                 )
             ) {
+                if (pending.isNotEmpty()) {
+                    item(key = "recurring_pending_banner") {
+                        PendingRecurringBanner(
+                            count = pending.size,
+                            totalMinor = pending.sumOf { it.amountMinor },
+                            onClick = onOpenPending,
+                            modifier = Modifier.padding(
+                                start = 14.dp,
+                                end = 14.dp,
+                                bottom = 8.dp
+                            )
+                        )
+                    }
+                }
                 state.groups.forEach { group ->
                     stickyHeader(key = "day_${group.dayStart}") {
                         DayGroupHeader(group = group)

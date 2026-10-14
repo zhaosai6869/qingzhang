@@ -151,11 +151,18 @@ fun describeRule(rule: RecurringRuleEntity): String {
         }
     }
     val end = when (rule.endType) {
-        END_UNTIL -> "到 ${Dates.dayLabel(rule.endMillis)}"
+        END_UNTIL -> "到 ${endLabel(rule.endMillis)}"
         END_COUNT -> "共 ${rule.totalCount} 次"
         else -> "长期有效"
     }
     return "$repeat · $end"
+}
+
+/** 截止日期只写月日，跨年时补上年份，免得「到 3月5日」被当成今年。 */
+private fun endLabel(millis: Long): String {
+    val day = Dates.monthDayLabel(millis)
+    val year = Dates.yearOf(millis)
+    return if (year == Dates.yearOf(System.currentTimeMillis())) day else "${year}年$day"
 }
 
 /** DatePicker 用 UTC 零点表示日期，这里把本地当天毫秒换算过去。 */

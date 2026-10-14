@@ -189,6 +189,14 @@ fun TransactionRowItem(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (tx.ruleId != null) {
+                    Text(
+                        text = "🔁",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
                 if (attachmentCount > 0) {
                     Text(
                         text = "📎$attachmentCount",

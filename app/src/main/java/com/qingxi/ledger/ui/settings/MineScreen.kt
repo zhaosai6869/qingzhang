@@ -125,7 +125,12 @@ fun MineScreen(onNavigate: (String) -> Unit) {
                 SummaryRow(
                     emoji = "🔁",
                     title = "周期记账",
-                    summary = if (state.recurringRuleCount == 0) "未设置" else "${state.recurringRuleCount} 条规则",
+                    summary = when {
+                        state.recurringRuleCount == 0 -> "未设置"
+                        state.recurringPendingCount > 0 ->
+                            "${state.recurringRuleCount} 条规则 · ${state.recurringPendingCount} 笔待确认"
+                        else -> "${state.recurringRuleCount} 条规则"
+                    },
                     onClick = { onNavigate("recurring") }
                 )
                 ThinDivider()
