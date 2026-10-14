@@ -2,7 +2,7 @@
 
 离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，连不上时依次改走公开镜像读同一份文件，可以在「关于」页关掉。
 
-包名 `com.qingxi.ledger`，当前版本 `0.1.0`（versionCode 1）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
+包名 `com.qingxi.ledger`，当前版本 `0.1.1`（versionCode 2）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
 ## 功能
 
@@ -137,7 +137,23 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 3. 用 release 资产的直链和 `sha256sum app-release.apk` 的结果改写根目录 `update.json`
 4. 提交并 push `update.json`——push 之前 `https://raw.githubusercontent.com/.../main/update.json` 还是旧内容
 
-内置的三级镜像只是代理同一个 raw URL，不需要为它们上传第二份文件、也不需要在镜像侧做任何操作；`update.json` push 上去它们就能读到。唯一例外是 `jsDelivr` 对 `@main` 有约一天的缓存，极端情况下新版本要晚一天才被发现。
+内置的三级镜像只是代理同一个 raw URL，不需要为它们上传第二份文件、也不需要在镜像侧做任何操作；`update.json` push 上去它们就能读到。唯一例外是 `jsDelivr` 对 `@main` 有约一天的缓存，极端情况下新版本要晚一天才被发现（实测：push 之后 gh-proxy 立刻给出新清单，jsDelivr 仍返回旧清单）。
+
+本机没装 `gh` CLI，第 2 步的建 Release 与传资产是直接用 Git 凭据管理器里已存的令牌调 API 做的：
+
+```bash
+TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill | grep '^password=' | cut -d= -f2-)
+# 建 Release（请求体里有中文，必须写成 UTF-8 文件再 @，命令行内联 JSON 会被转码弄坏）
+curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary "@release-body.json" https://api.github.com/repos/zhaosai6869/qingzhang/releases
+# 传资产（name 要和 update.json 的 apkUrl 尾段一致）
+curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/vnd.android.package-archive" \
+  --data-binary "@app/build/outputs/apk/release/app-release.apk" \
+  "<返回的 upload_url>?name=app-release.apk"
+```
+
+上传成功后 GitHub 会回资产的 `digest: sha256:...`，拿它和 `sha256sum` 的本地结果对一遍，能确认传上去的就是这个文件。
 
 ## 数据与存储
 
@@ -207,7 +223,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :app:assembleR
 
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
-- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」还没跑过，因为还没有第二个版本可下
+- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」仍未在设备上跑过。v0.1.1 就是为这条链路准备的包，清单里的 `sha256`/`sizeBytes` 与 Release 资产已在本机两侧核对一致（GitHub 直链与 `gh-proxy.com/` + 直链都返回 3,073,527 字节、摘要相同），但这只证明包可下、URL 拼接正确，不代表应用内的下载与安装弹窗已验证
 - 内置源的回退链路只验证了「读不通就放弃」这一半：四个候选各等 12 秒后被放弃、界面回到「检查更新」，取消也能中断；「主源超时后由镜像读成功」这半还没跑过——验证时那台 AVD 整机没有外网（IP ping 与 DNS 都不通），拿不到任何一条成功响应
 - `repository.download()` 仍是「一次 connect 打断不了」的老形状：下载阶段的取消要等各地址的 `connectTimeout`（15 秒）逐个走完，比检查阶段更拖
 - jsDelivr 备胎对 `@main` 有约一天缓存，极端情况下会晚一天才发现新版本
