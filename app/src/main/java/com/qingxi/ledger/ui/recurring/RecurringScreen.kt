@@ -1,5 +1,6 @@
 package com.qingxi.ledger.ui.recurring
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -198,6 +200,10 @@ private fun RuleRow(
     ) { rowModifier, onRowClick ->
         Row(
             modifier = rowModifier
+                .fillMaxWidth()
+                // 行必须涂满卡片色，否则底下的红色删除面板会一直透出来
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.surface)
                 .clickable(onClickLabel = "编辑规则", onClick = onRowClick)
                 .padding(vertical = 12.dp, horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically

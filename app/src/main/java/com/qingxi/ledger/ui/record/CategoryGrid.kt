@@ -30,8 +30,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.qingxi.ledger.data.category.CategoryEntity
 
@@ -51,16 +53,26 @@ fun CategoryGrid(
     selectedId: Long,
     onSelect: (Long) -> Unit,
     onAddClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    columns: Int = 0
 ) {
     val colors = MaterialTheme.colorScheme
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val columns = ((maxWidth + CATEGORY_GRID_SPACING) / (CATEGORY_CELL_WIDTH + CATEGORY_GRID_SPACING))
+        val autoColumns = ((maxWidth + CATEGORY_GRID_SPACING) / (CATEGORY_CELL_WIDTH + CATEGORY_GRID_SPACING))
             .toInt()
             .coerceAtLeast(1)
-        val overflow = categories.size + 1 > columns * 1.5f
+        // 弹窗比页面窄，调用方指定列数时把格子撑满整行，别按固定 64dp 挤出一列窄边。
+        // 除法会留下小数 dp，四舍五入向上就让最后一格被挤到下一行，所以按整像素向下取。
+        val gridColumns = if (columns > 0) columns else autoColumns
+        val cellWidth = if (columns > 0) {
+            val available = (maxWidth - CATEGORY_GRID_SPACING * (gridColumns - 1)) / gridColumns
+            with(LocalDensity.current) { available.toPx().toInt().toDp() }
+        } else {
+            CATEGORY_CELL_WIDTH
+        }
+        val overflow = categories.size + 1 > gridColumns * 1.5f
 
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // 开关放在网格上方：展开后网格变高，开关若留在下方会被顶出屏幕，
@@ -100,10 +112,11 @@ fun CategoryGrid(
                             icon = category.icon,
                             name = category.name,
                             selected = category.id == selectedId,
+                            cellWidth = cellWidth,
                             onClick = { onSelect(category.id) }
                         )
                     }
-                    AddCategoryCell(onAddClick = onAddClick)
+                    AddCategoryCell(cellWidth = cellWidth, onAddClick = onAddClick)
                 }
             }
         }
@@ -124,13 +137,13 @@ private fun ToggleLabel(text: String, onClickLabel: String, onClick: () -> Unit)
 }
 
 @Composable
-private fun AddCategoryCell(onAddClick: () -> Unit) {
+private fun AddCategoryCell(cellWidth: Dp, onAddClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = colors.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, colors.outlineVariant),
-        modifier = Modifier.size(width = CATEGORY_CELL_WIDTH, height = CATEGORY_CELL_HEIGHT)
+        modifier = Modifier.size(width = cellWidth, height = CATEGORY_CELL_HEIGHT)
     ) {
         Column(
             modifier = Modifier.clickable(onClickLabel = "添加自定义分类", onClick = onAddClick).fillMaxWidth(),
@@ -148,6 +161,7 @@ private fun CategoryCell(
     icon: String,
     name: String,
     selected: Boolean,
+    cellWidth: Dp,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -157,7 +171,7 @@ private fun CategoryCell(
         contentColor = if (selected) colors.onPrimaryContainer else colors.onSurface,
         border = if (selected) BorderStroke(1.dp, colors.primary) else null,
         modifier = Modifier
-            .size(width = CATEGORY_CELL_WIDTH, height = CATEGORY_CELL_HEIGHT)
+            .size(width = cellWidth, height = CATEGORY_CELL_HEIGHT)
             .clickable(onClickLabel = name, onClick = onClick)
     ) {
         Column(

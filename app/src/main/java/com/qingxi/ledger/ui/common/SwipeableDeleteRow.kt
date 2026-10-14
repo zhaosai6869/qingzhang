@@ -98,6 +98,8 @@ fun SwipeableDeleteRow(
                 )
             }
     ) {
+        // 收回状态下不画面板：它的圆角和行内容差一两个像素，一直画就会在右上角透出一线红。
+        // 用 graphicsLayer 的 alpha 而不是 if 包一层，滑动动画每帧只重绘不重组。
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = ExpenseRed,
@@ -105,6 +107,7 @@ fun SwipeableDeleteRow(
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
                 .width(REVEAL_WIDTH)
+                .graphicsLayer { alpha = if (shift.value < 0f) 1f else 0f }
                 .clickable(enabled = revealed, onClickLabel = deleteLabel, onClick = onDelete)
         ) {
             Box(

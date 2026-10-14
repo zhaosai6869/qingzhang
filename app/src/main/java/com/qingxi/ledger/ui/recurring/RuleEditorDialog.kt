@@ -5,14 +5,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -23,8 +22,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,7 +63,7 @@ import com.qingxi.ledger.ui.record.TagEditor
 import com.qingxi.ledger.util.Dates
 import kotlinx.coroutines.launch
 
-private val WEEKDAY_WIDTH = 36.dp
+private val DROPDOWN_MAX_HEIGHT = 250.dp
 private val GRID_SPACING = 8.dp
 
 /**
@@ -124,7 +126,8 @@ fun RuleEditorDialog(
                     categories = categories,
                     selectedId = draft.categoryId,
                     onSelect = { draft = draft.copy(categoryId = it) },
-                    onAddClick = { showAddCategory = true }
+                    onAddClick = { showAddCategory = true },
+                    columns = 4
                 )
                 AmountField(
                     amountText = draft.amountText,
@@ -250,7 +253,6 @@ private fun AmountField(amountText: String, onValueChange: (String) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RepeatField(draft: RuleDraft, onChange: (RuleDraft) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -267,52 +269,131 @@ private fun RepeatField(draft: RuleDraft, onChange: (RuleDraft) -> Unit) {
             }
         }
         when (draft.repeatType) {
-            REPEAT_WEEKLY -> WeekdayRow(selected = draft.weekdays) { next -> onChange(draft.copy(weekdays = next)) }
-            REPEAT_MONTHLY -> DayOfMonthRow(selected = draft.dayOfMonth) { day -> onChange(draft.copy(dayOfMonth = day)) }
+            REPEAT_WEEKLY -> WeekdayDropdown(selected = draft.weekdays) { next -> onChange(draft.copy(weekdays = next)) }
+            REPEAT_MONTHLY -> DayOfMonthDropdown(selected = draft.dayOfMonth) { day -> onChange(draft.copy(dayOfMonth = day)) }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** 周几用下拉多选：七个 chip 挤在一行太小，31 个号又能撑满好几屏。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WeekdayRow(selected: List<Int>, onChange: (List<Int>) -> Unit) {
-    val next = { iso: Int ->
-        val toggle = if (iso in selected) selected - iso else (selected + iso).sorted()
-        toggle
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        ISO_WEEKDAY_ORDER.forEach { iso ->
-            OptionChip(
-                label = isoWeekdayLabel(iso),
-                selected = iso in selected,
-                modifier = Modifier.weight(1f),
-                compact = true
-            ) { onChange(next(iso)) }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DayOfMonthRow(selected: Int, onChange: (Int) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+private fun WeekdayDropdown(selected: List<Int>, onChange: (List<Int>) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var expanded by remember { mutableStateOf(false) }
+    val label = if (selected.isEmpty()) "还没选周几" else selected.joinToString("、") { "周${isoWeekdayLabel(it)}" }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        SelectorField(
+            text = label,
+            fallback = selected.isEmpty(),
+            onClickLabel = "选择周几",
+            modifier = Modifier
+                // 锚点自己会响应点击，再叠一层 clickable 会把展开抵消成零，这里只让它定位
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = false)
+                .fillMaxWidth(),
+            onClick = { expanded = !expanded }
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = DROPDOWN_MAX_HEIGHT)
         ) {
-            (1..31).forEach { day ->
-                OptionChip(
-                    label = day.toString(),
-                    selected = day == selected,
-                    compact = true
-                ) { onChange(day) }
+            ISO_WEEKDAY_ORDER.forEach { iso ->
+                val checked = iso in selected
+                DropdownMenuItem(
+                    text = { Text(text = "周${isoWeekdayLabel(iso)}") },
+                    trailingIcon = {
+                        if (checked) {
+                            Text(text = "✓", style = MaterialTheme.typography.bodyMedium, color = colors.primary)
+                        }
+                    },
+                    // 多选：勾完一项不关窗，让用户把「周一和周四」一次点齐
+                    onClick = {
+                        onChange(if (checked) selected - iso else (selected + iso).sorted())
+                    }
+                )
             }
         }
-        Text(
-            text = "29-31 号在不足天数的月份按当月最后一天计入",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DayOfMonthDropdown(selected: Int, onChange: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        SelectorField(
+            text = "$selected 号",
+            onClickLabel = "选择几号",
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = false)
+                .fillMaxWidth(),
+            onClick = { expanded = !expanded }
         )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = DROPDOWN_MAX_HEIGHT)
+        ) {
+            // 菜单自带滚动，这里再套一层 verticalScroll 会拿到无限高度约束直接崩
+            (1..31).forEach { day ->
+                DropdownMenuItem(
+                    text = { Text(text = "$day 号") },
+                    trailingIcon = {
+                        if (day == selected) {
+                            Text(text = "✓", style = MaterialTheme.typography.bodyMedium, color = colors.primary)
+                        }
+                    },
+                    onClick = {
+                        onChange(day)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+    Text(
+        text = "29-31 号在不足天数的月份按当月最后一天计入",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/** 下拉的锚点长得和其他表单项一致：点开合上的都是同一个灰底条。 */
+@Composable
+private fun SelectorField(
+    text: String,
+    onClickLabel: String,
+    modifier: Modifier = Modifier,
+    fallback: Boolean = false,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = colors.surfaceVariant,
+        modifier = modifier.clickable(onClickLabel = onClickLabel, onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "🗓", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (fallback) colors.onSurfaceVariant else colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (fallback) "  ▾" else "▾",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -344,7 +425,6 @@ private fun DateField(label: String, millis: Long, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EndField(draft: RuleDraft, onChange: (RuleDraft) -> Unit, onPickEnd: () -> Unit) {
     val colors = MaterialTheme.colorScheme
@@ -476,7 +556,6 @@ private fun OptionChip(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -486,7 +565,6 @@ private fun OptionChip(
         contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
         border = if (selected) BorderStroke(1.dp, colors.primary) else BorderStroke(1.dp, colors.outlineVariant),
         modifier = modifier
-            .then(if (compact) Modifier.width(WEEKDAY_WIDTH) else Modifier)
             .height(38.dp)
             .clickable(onClickLabel = label, onClick = onClick)
     ) {
