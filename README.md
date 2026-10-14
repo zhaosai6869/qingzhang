@@ -2,7 +2,7 @@
 
 离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，连不上时依次改走公开镜像读同一份文件，可以在「关于」页关掉。
 
-包名 `com.qingxi.ledger`，当前版本 `0.1.1`（versionCode 2）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
+包名 `com.qingxi.ledger`，当前版本 `0.2.0`（versionCode 3）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
 ## 功能
 
@@ -21,10 +21,17 @@
 
 **统计**：本月 / 近 3 月 / 近 6 月 / 近 12 月四个区间；支出趋势（自绘柱状 + 折线）、分类占比（自绘环形）、分类排行比例条；分类可下钻到区间明细；另有自然年年度报告（月度趋势、分类与标签排行、记录最密集的一天）
 
+**周期记账**
+- 规则三种频率：每天 / 每周（勾选周几）/ 每月（选几号），金额为固定值，带分类、备注与标签
+- 结束条件三选一：无限 / 到指定日期 / 共 N 次
+- 到期项**只在冷启动时计算**，只列最近 90 天内的，生成「待确认」清单；点确认才写进账单，跳过表示这笔不记、之后不再提醒
+- 规则本身不等于已发生的支出，规则页与「我的」只显示规则条数，不做任何金额合计
+- 幂等：`transactions` 上 `(ruleId, dueDayKey)` 唯一索引 + `OnConflictStrategy.IGNORE`，同一期重复计算也只入一笔
+
 **我的**
 - 外观：跟随系统 / 浅色 / 深色，5 套主题色
 - 账单月起始日（1~28 日，统计与流水的「本月」按此口径）
-- 备份与恢复、分类管理、应用锁、关于
+- 备份与恢复、分类管理、周期记账、应用锁、关于
 
 **应用锁**
 - 指纹/面容（系统 BiometricPrompt）为主，6 位数字 PIN 备用
@@ -53,7 +60,7 @@
 | KSP | 2.3.12 |
 | compileSdk / targetSdk / minSdk | 37 / 36 / 26 |
 | Compose BOM | 2026.09.00（Material3） |
-| Room | 2.8.5（schema v1，已导出） |
+| Room | 2.8.5（schema v2，`1.json` / `2.json` 均已导出） |
 | Navigation Compose | 2.10.2 |
 | DataStore Preferences | 1.2.1 |
 | androidx.biometric + fragment | 1.1.0 / 1.8.7 |
@@ -76,10 +83,11 @@ app/src/main/java/com/qingxi/ledger/
 │   ├── category/            CategoryEntity / Dao / Repository / CategorySeeder
 │   ├── settings/            SettingsRepository（DataStore: qingji_settings）
 │   ├── backup/              BackupRepository：JSON / 加密 .qjbak / CSV 导出与导入
+│   ├── recurring/           RecurringRuleEntity / Dao / Repository + RecurringDue（到期计算）/ RecurringPendingStore（待确认清单）
 │   ├── update/              UpdateRepository（清单解析 + 下载校验）与 UpdateController（进程级检查状态）
 │   └── lock 在 ui/lock 下    应用锁偏好独立存于 qingji_lock
 ├── ui/
-│   ├── record/  flow/  calendar/  stats/  settings/  lock/
+│   ├── record/  flow/  calendar/  stats/  settings/  lock/  recurring/
 │   ├── update/              UpdateViewModel + 关于页的「版本更新」区块
 │   ├── theme/Theme.kt       动态调色板
 │   └── common/AmountDisplay.kt
@@ -160,6 +168,7 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 | 内容 | 位置 |
 | --- | --- |
 | 账单与分类 | `databases/qingji.db`（Room，`transactions` + `categories`） |
+| 周期规则与跳过记录 | 同一库的 `recurring_rules` + `recurring_dismissals` |
 | 界面偏好 | DataStore `qingji_settings` |
 | 应用锁（PIN 哈希/盐、开关、失败计数） | DataStore `qingji_lock` |
 | 附件图片 | `files/attachments/`（`att_<时间戳>.jpg`） |
@@ -169,15 +178,16 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 关键约定：
 - **金额一律存 Long「分」**（`amountMinor`），显示层统一按元格式化，`Money.formatSigned` 给支出加负号
 - `kind = 1` 支出；旧版本残留的 `kind = 2` 收入记录界面不再展示，但 DAO 的全量导出/计数保持完整，备份与导入可无损往返
+- 手动记的流水 `ruleId`/`dueDayKey` 都留 NULL——SQLite 里 NULL 之间不算冲突，唯一索引只约束周期生成的那几笔
 - 标签与附件路径分别以逗号拼接在 `tags` / `attachments` 字段，`Models.kt` 提供 `joinTags/splitTags/joinPaths/splitPaths`
 - 账单月区间统一走 `Dates.periodOf/periodStart/periodEnd`，起始日上限 28 以避免月末天数不足
 
 备份格式：
-- `.json` — 明文，`version/app/exportedAt/categories/transactions`
+- `.json` — 明文，`version = 2`，字段 `version/app/exportedAt/categories/transactions/rules/dismissals`；旧版 v1 备份缺 `rules`/`dismissals` 两段，导入时只当「没有周期规则」，恢复照常
 - `.qjbak` — 口令加密，`QJBAK1` magic + salt(12) + IV(12) + AES-256-GCM 密文，PBKDF2-HMAC-SHA256 210k 次迭代派生密钥
 - `.csv` — 带 BOM，列：日期,时间,类型,分类,金额,备注,标签,来源
 
-导入支持「覆盖」与「合并」两种模式，合并按 `时间|金额|类型|分类|备注` 去重。
+导入支持「覆盖」与「合并」两种模式，合并按 `时间|金额|类型|分类|备注` 去重。合并导入的规则会重新发号，跳过记录跟着改 `ruleId` 指向，否则会指到别的规则上。
 
 ## 更新源格式
 
@@ -185,11 +195,11 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 
 ```json
 {
-  "versionCode": 2,
+  "versionCode": 3,
   "versionName": "0.2.0",
-  "apkUrl": "https://example.com/qingji/app-release-0.2.0.apk",
+  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.0/app-release.apk",
   "sha256": "64 位十六进制小写，对应 apkUrl 那个文件",
-  "sizeBytes": 4521984,
+  "sizeBytes": 3106295,
   "notes": "这一版改了什么"
 }
 ```
@@ -197,7 +207,7 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 - `versionCode` 必填且要与 `android:versionCode` 一致，客户端只比较它，`versionName` 仅用于展示
 - `sha256` 必填且必须是 64 位十六进制，缺失或格式不对就判定清单非法；下载完成后摘要不一致会删掉文件并报错
 - `apkUrl` 同样只接受 https；`sizeBytes`、`notes` 可省略
-- 发布时算校验值：`sha256sum app-release-0.2.0.apk`
+- 发布时算校验值：`sha256sum app/build/outputs/apk/release/app-release.apk`（这个目录会被下次构建清掉，发版前先把产物拷出去留档）
 - 下载走 `HttpURLConnection`，连接超时 15s、读取超时 30s，清单大小上限 256KB；读清单另有 12s 的**每源总时限**，因为上面两个超时都管不到 DNS 与逐地址重试
 
 ## 隐私与安全
@@ -217,15 +227,17 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 - 数据库实例在 `MainActivity.onCreate` 里 `AppDatabase.init()` 初始化，小组件读库前也调它
 - 注释写中文，只解释「为什么」；界面文案与 `onClickLabel` 均为中文无障碍标签
 - `rememberNavController()` 必须挂在 `AppLockGate` **外层**——上锁会把 content 整棵移出组合，导航栈提到外面才能在解锁后原样恢复
-- Room schema 导出到 `app/schemas/`，改表要升 `version` 并补 Migration（当前只有 `fallbackToDestructiveMigrationOnDowngrade`）
+- Room schema 导出到 `app/schemas/`，改表要升 `version` 并补 Migration（v1→v2 是 `MIGRATION_1_2`，另配 `fallbackToDestructiveMigrationOnDowngrade`）
 
 ## 已知限制
 
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
-- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」仍未在设备上跑过。v0.1.1 就是为这条链路准备的包，清单里的 `sha256`/`sizeBytes` 与 Release 资产已在本机两侧核对一致（GitHub 直链与 `gh-proxy.com/` + 直链都返回 3,073,527 字节、摘要相同），但这只证明包可下、URL 拼接正确，不代表应用内的下载与安装弹窗已验证
+- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」仍未在设备上跑过。v0.1.1 就是为这条链路准备的包，v0.2.0 的清单同样把 `sha256`/`sizeBytes` 与 Release 资产两侧核对过（GitHub 直链与镜像都返回同一摘要），但这只证明包可下、URL 拼接正确，不代表应用内的下载与安装弹窗已验证
+- release 包（R8 全量混淆）只验证到「能编出来、签名正确、`versionCode/versionName` 写对」，没有装到设备跑过：模拟器上装的是 debug 签名，换成 release 签名必须先卸载，会连带清空测试账本数据。真机验证走的是 debug 包
 - 内置源的回退链路只验证了「读不通就放弃」这一半：四个候选各等 12 秒后被放弃、界面回到「检查更新」，取消也能中断；「主源超时后由镜像读成功」这半还没跑过——验证时那台 AVD 整机没有外网（IP ping 与 DNS 都不通），拿不到任何一条成功响应
 - `repository.download()` 仍是「一次 connect 打断不了」的老形状：下载阶段的取消要等各地址的 `connectTimeout`（15 秒）逐个走完，比检查阶段更拖
 - jsDelivr 备胎对 `@main` 有约一天缓存，极端情况下会晚一天才发现新版本
 - 忘记 PIN 只能清除应用数据，唯一的出路是事先导出备份
-- 不支持预算、资产账户、周期记账、多账本、云同步、收入记录
+- 周期记账不做后台唤醒：到期项只在冷启动算一次，应用长期不打开就一直不提醒；清单只回溯 90 天，比这更早的到期项视为永久漏记，不会再列出
+- 不支持预算、资产账户、多账本、云同步、收入记录
