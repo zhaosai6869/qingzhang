@@ -1,8 +1,8 @@
 {
-  "versionCode": 1,
-  "versionName": "0.1.0",
-  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.1.0/app-release.apk",
-  "sha256": "494cb311647a19cd32a0e2fa9f6dec26da14cbb3014ba94d5af5dd75fed1f1b1",
+  "versionCode": 2,
+  "versionName": "0.1.1",
+  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.1.1/app-release.apk",
+  "sha256": "1389088e80f6300ccbfc2aec55c45a477729f2c8ade33f642a09b0e2f50f404c",
   "sizeBytes": 3073527,
-  "notes": "首个公开版本：纯支出记账、应用锁、在线更新。"
+  "notes": "在线更新链路验证版：内置更新源连不上时依次改走公开镜像，单个源最多等 12 秒。"
 }
