@@ -1,8 +1,8 @@
 {
-  "versionCode": 2,
-  "versionName": "0.1.1",
-  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.1.1/app-release.apk",
-  "sha256": "1389088e80f6300ccbfc2aec55c45a477729f2c8ade33f642a09b0e2f50f404c",
-  "sizeBytes": 3073527,
-  "notes": "在线更新链路验证版：内置更新源连不上时依次改走公开镜像，单个源最多等 12 秒。"
+  "versionCode": 3,
+  "versionName": "0.2.0",
+  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.0/app-release.apk",
+  "sha256": "b74b25ffe8e4a3fc86a176f511c65aa43bd931411c7539efee4f328ecf49ba17",
+  "sizeBytes": 3106295,
+  "notes": "新增周期记账：每天/每周/每月规则，冷启动算出最近 90 天的到期项，确认后才写进账单。"
 }
