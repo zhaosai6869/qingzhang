@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.qingxi.ledger.data.category.CategoryDao
 import com.qingxi.ledger.data.category.CategorySeeder
 import com.qingxi.ledger.data.category.CategoryEntity
+import com.qingxi.ledger.data.category.EXPENSE_SEEDS
 import com.qingxi.ledger.data.recurring.RecurringDismissalDao
 import com.qingxi.ledger.data.recurring.RecurringDismissalEntity
 import com.qingxi.ledger.data.recurring.RecurringRuleDao
@@ -23,7 +24,7 @@ import com.qingxi.ledger.data.tx.TransactionEntity
         RecurringRuleEntity::class,
         RecurringDismissalEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -79,9 +80,33 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3：内置支出分类精简到 8 个。表结构没动，只删掉多出来的系统分类，
+         * 挂在它们下面的账单和周期规则改挂到「其他」；用户自己加的分类（isSystem = 0）保留。
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val keep = EXPENSE_SEEDS.joinToString(", ") { "'${it.name}'" }
+                val obsolete = "isSystem = 1 AND kind = 1 AND name NOT IN ($keep)"
+                val fallbackId = db.query(
+                    "SELECT id FROM categories WHERE isSystem = 1 AND kind = 1 AND name = '其他' LIMIT 1"
+                ).use { if (it.moveToFirst()) it.getLong(0) else null }
+                if (fallbackId != null) {
+                    db.execSQL(
+                        "UPDATE `transactions` SET `categoryId` = $fallbackId " +
+                            "WHERE `categoryId` IN (SELECT `id` FROM `categories` WHERE $obsolete)"
+                    )
+                    db.execSQL(
+                        "UPDATE `recurring_rules` SET `categoryId` = $fallbackId " +
+                            "WHERE `categoryId` IN (SELECT `id` FROM `categories` WHERE $obsolete)"
+                    )
+                }
+                db.execSQL("DELETE FROM `categories` WHERE $obsolete")
+            }
+        }
+
         lateinit var instance: AppDatabase
             private set
-
         fun init(context: Context): AppDatabase {
             if (!::instance.isInitialized) {
                 instance = Room.databaseBuilder(
@@ -89,7 +114,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME
                 ).addCallback(CategorySeeder.callback())
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
             }

@@ -6,19 +6,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 data class CategorySeed(val name: String, val icon: String)
 
-private val EXPENSE_SEEDS = listOf(
+/** 内置支出分类。改动这里要同步 [com.qingxi.ledger.data.db.AppDatabase] 的 v2→v3 迁移。 */
+val EXPENSE_SEEDS = listOf(
     CategorySeed("餐饮", "🍚"),
     CategorySeed("交通", "🚌"),
     CategorySeed("购物", "🛍"),
-    CategorySeed("日用", "🧻"),
     CategorySeed("居住", "🏠"),
     CategorySeed("娱乐", "🎮"),
     CategorySeed("医疗", "🏥"),
-    CategorySeed("学习", "📚"),
-    CategorySeed("出行", "✈"),
-    CategorySeed("人情", "🎁"),
     CategorySeed("通讯", "📱"),
-    CategorySeed("宠物", "🐶"),
     CategorySeed("其他", "📦")
 )
 

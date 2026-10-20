@@ -33,14 +33,6 @@ const val MAX_AMOUNT_MINOR = 9_999_999_999L
 
 private val OPERATORS = charArrayOf('+', '-', '×', '÷')
 
-data class RecentPreset(
-    val categoryId: Long,
-    val categoryName: String,
-    val amountMinor: Long,
-    val note: String,
-    val tags: List<String>
-)
-
 data class RecordUiState(
     val amountInput: String = "",
     val amountMinor: Long? = null,
@@ -52,7 +44,6 @@ data class RecordUiState(
     val timeMillis: Long = System.currentTimeMillis(),
     val attachments: List<String> = emptyList(),
     val origin: Int = ORIGIN_MANUAL,
-    val recents: List<RecentPreset> = emptyList(),
     val message: String? = null,
     val messageId: Int = 0,
     val saved: Boolean = false
@@ -92,16 +83,7 @@ class RecordViewModel(private val app: AppGraph) : ViewModel() {
         viewModelScope.launch {
             app.transactions.observeExpenses().collect { list ->
                 val tags = list.flatMap { splitTags(it.tags) }.distinct().take(12)
-                val recents = list.distinctBy { it.categoryId }.take(6).map {
-                    RecentPreset(it.categoryId, "", it.amountMinor, it.note, splitTags(it.tags))
-                }
-                val allNameMap = runCatching { app.categories.all().associate { it.id to it.name } }.getOrNull()
-                _state.update {
-                    it.copy(
-                        knownTags = tags,
-                        recents = recents.map { r -> r.copy(categoryName = allNameMap?.get(r.categoryId) ?: "分类") }
-                    )
-                }
+                _state.update { it.copy(knownTags = tags) }
             }
         }
     }
@@ -146,22 +128,15 @@ class RecordViewModel(private val app: AppGraph) : ViewModel() {
         }
     }
 
-    fun pickDateTime(year: Int, month: Int, day: Int, hour: Int, minute: Int) {
+    /** 只改日期，时分沿用原值：新建沿用当前时刻，编辑则不动这笔账单原本的时间。 */
+    fun pickDate(year: Int, month: Int, day: Int) {
         _state.update { s ->
             val cal = Calendar.getInstance().apply { timeInMillis = s.timeMillis }
             cal.set(Calendar.YEAR, year)
             cal.set(Calendar.MONTH, month - 1)
             cal.set(Calendar.DAY_OF_MONTH, day)
-            cal.set(Calendar.HOUR_OF_DAY, hour)
-            cal.set(Calendar.MINUTE, minute)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
             s.copy(timeMillis = cal.timeInMillis)
         }
-    }
-
-    fun applyRecent(preset: RecentPreset) {
-        _state.update { it.copy(selectedCategoryId = preset.categoryId, note = preset.note, tags = preset.tags) }
     }
 
     fun importImages(context: Context, uris: List<Uri>) {

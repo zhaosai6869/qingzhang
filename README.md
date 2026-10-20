@@ -8,8 +8,8 @@
 
 **记一笔**
 - 金额用系统键盘输入，支持 `+ - × ÷` 算式（先乘除后加减，允许以运算符结尾）
-- 分类宫格默认显示一行半，可展开/收起；分类 emoji 图标，内置 13 个支出分类，可改名换图标或增删自定义分类
-- 备注、多标签、日期时间选择、「最近常用」一键套用（分类 + 备注 + 标签）
+- 分类宫格默认显示一行半，可展开/收起；分类 emoji 图标，内置 8 个支出分类（餐饮 / 交通 / 购物 / 居住 / 娱乐 / 医疗 / 通讯 / 其他），可改名换图标或增删自定义分类
+- 备注、多标签、日期选择（只选年月日，时分沿用当前时刻或原账单时间）
 - 附件图片走系统相册选择器（Photo Picker），缩略图可点击全屏查看、左右翻页、单张删除
 
 **流水**
@@ -60,7 +60,7 @@
 | KSP | 2.3.12 |
 | compileSdk / targetSdk / minSdk | 37 / 36 / 26 |
 | Compose BOM | 2026.09.00（Material3） |
-| Room | 2.8.5（schema v2，`1.json` / `2.json` 均已导出） |
+| Room | 2.8.5（schema v3，`1.json` / `2.json` / `3.json` 均已导出） |
 | Navigation Compose | 2.10.2 |
 | DataStore Preferences | 1.2.1 |
 | androidx.biometric + fragment | 1.1.0 / 1.8.7 |
@@ -227,7 +227,7 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 - 数据库实例在 `MainActivity.onCreate` 里 `AppDatabase.init()` 初始化，小组件读库前也调它
 - 注释写中文，只解释「为什么」；界面文案与 `onClickLabel` 均为中文无障碍标签
 - `rememberNavController()` 必须挂在 `AppLockGate` **外层**——上锁会把 content 整棵移出组合，导航栈提到外面才能在解锁后原样恢复
-- Room schema 导出到 `app/schemas/`，改表要升 `version` 并补 Migration（v1→v2 是 `MIGRATION_1_2`，另配 `fallbackToDestructiveMigrationOnDowngrade`）
+- Room schema 导出到 `app/schemas/`，改表要升 `version` 并补 Migration（v1→v2 是 `MIGRATION_1_2`；v2→v3 是 `MIGRATION_2_3`，表结构没动、只精简内置分类，另配 `fallbackToDestructiveMigrationOnDowngrade`）
 
 ## 已知限制
 

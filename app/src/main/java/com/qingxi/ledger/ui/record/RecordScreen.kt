@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,9 +29,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,8 +58,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.qingxi.ledger.di.appViewModel
 import com.qingxi.ledger.ui.theme.ExpenseRed
 import com.qingxi.ledger.util.AmountExpr
-import com.qingxi.ledger.util.Dates
-import com.qingxi.ledger.util.Money
 import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -139,15 +133,6 @@ fun RecordScreen(editId: Long?, onClose: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 DateRow(millis = state.timeMillis, onClick = { showDatePicker = true })
-                if (state.recents.isNotEmpty()) {
-                    RecentChips(
-                        recents = state.recents,
-                        onClick = { preset ->
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            vm.applyRecent(preset)
-                        }
-                    )
-                }
                 CategoryGrid(
                     categories = state.categories,
                     selectedId = state.selectedCategoryId,
@@ -183,11 +168,11 @@ fun RecordScreen(editId: Long?, onClose: () -> Unit) {
     }
 
     if (showDatePicker) {
-        DateTimePickerDialog(
+        DatePickerOnlyDialog(
             initialMillis = state.timeMillis,
             onDismiss = { showDatePicker = false },
-            onConfirm = { year, month, day, hour, minute ->
-                vm.pickDateTime(year, month, day, hour, minute)
+            onConfirm = { year, month, day ->
+                vm.pickDate(year, month, day)
                 showDatePicker = false
             }
         )
@@ -322,42 +307,7 @@ private fun DateRow(millis: Long, onClick: () -> Unit) {
         ) {
             Text(text = "🗓", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.width(6.dp))
-            Text(text = formatChineseDateTime(millis), style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun RecentChips(
-    recents: List<RecentPreset>,
-    onClick: (RecentPreset) -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "最近常用",
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.onSurfaceVariant
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            recents.forEach { preset ->
-                val label = "${preset.categoryName} ${Money.format(preset.amountMinor)}"
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = colors.surface,
-                    contentColor = colors.onSurfaceVariant,
-                    border = BorderStroke(1.dp, colors.outline),
-                    modifier = Modifier.clickable(onClickLabel = "一键套用 $label", onClick = { onClick(preset) })
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
+            Text(text = formatChineseDate(millis), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -396,19 +346,13 @@ private fun NoteField(note: String, onChange: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateTimePickerDialog(
+private fun DatePickerOnlyDialog(
     initialMillis: Long,
     onDismiss: () -> Unit,
-    onConfirm: (year: Int, month: Int, day: Int, hour: Int, minute: Int) -> Unit
+    onConfirm: (year: Int, month: Int, day: Int) -> Unit
 ) {
     val utcCal = remember { Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = initialMillis } }
     val datePickerState: DatePickerState = rememberDatePickerState(initialSelectedDateMillis = utcCal.timeInMillis)
-    val localCal = remember { Calendar.getInstance().apply { timeInMillis = initialMillis } }
-    val timePickerState = rememberTimePickerState(
-        initialHour = localCal.get(Calendar.HOUR_OF_DAY),
-        initialMinute = localCal.get(Calendar.MINUTE),
-        is24Hour = true
-    )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -418,9 +362,7 @@ private fun DateTimePickerDialog(
                 onConfirm(
                     parts.get(Calendar.YEAR),
                     parts.get(Calendar.MONTH) + 1,
-                    parts.get(Calendar.DAY_OF_MONTH),
-                    timePickerState.hour,
-                    timePickerState.minute
+                    parts.get(Calendar.DAY_OF_MONTH)
                 )
             }) {
                 Text(text = "确定", style = MaterialTheme.typography.labelLarge)
@@ -441,19 +383,17 @@ private fun DateTimePickerDialog(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             DatePicker(state = datePickerState, showModeToggle = false)
-            TimePicker(state = timePickerState)
         }
     }
 }
 
-private fun formatChineseDateTime(millis: Long): String {
+private fun formatChineseDate(millis: Long): String {
     val cal = Calendar.getInstance().apply { timeInMillis = millis }
     return String.format(
         Locale.CHINA,
-        "%d年%d月%d日 %s",
+        "%d年%d月%d日",
         cal.get(Calendar.YEAR),
         cal.get(Calendar.MONTH) + 1,
-        cal.get(Calendar.DAY_OF_MONTH),
-        Dates.timeLabel(millis)
+        cal.get(Calendar.DAY_OF_MONTH)
     )
 }
