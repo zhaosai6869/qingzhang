@@ -1,8 +1,8 @@
 {
-  "versionCode": 3,
-  "versionName": "0.2.0",
-  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.0/app-release.apk",
-  "sha256": "b74b25ffe8e4a3fc86a176f511c65aa43bd931411c7539efee4f328ecf49ba17",
-  "sizeBytes": 3106295,
-  "notes": "新增周期记账：每天/每周/每月规则，冷启动算出最近 90 天的到期项，确认后才写进账单。"
+  "versionCode": 4,
+  "versionName": "0.2.1",
+  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.1/app-release.apk",
+  "sha256": "eff1071dbb57c47f990f249394a62856e831669434641bb078f06b679b14a047",
+  "sizeBytes": 3089571,
+  "notes": "周期记账弹窗改版：分类一行四个，周几/几号改下拉，删除改左滑才出现。记一笔去掉「最近常用」，日期只选年月日。内置分类精简到 8 个，原挂在日用/学习/出行/人情/宠物下的账单与规则自动改挂到「其他」。"
 }

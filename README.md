@@ -2,7 +2,7 @@
 
 离线单机记账 Android 应用，只记支出。Kotlin + Jetpack Compose + Room，账单数据不上传；联网只有一处——打开应用时向更新源读一份版本清单，默认是本仓库 `main` 分支的 `update.json`，连不上时依次改走公开镜像读同一份文件，可以在「关于」页关掉。
 
-包名 `com.qingxi.ledger`，当前版本 `0.2.0`（versionCode 3）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
+包名 `com.qingxi.ledger`，当前版本 `0.2.1`（versionCode 4）。发布包见 [Releases](https://github.com/zhaosai6869/qingzhang/releases)。
 
 ## 功能
 
@@ -22,10 +22,11 @@
 **统计**：本月 / 近 3 月 / 近 6 月 / 近 12 月四个区间；支出趋势（自绘柱状 + 折线）、分类占比（自绘环形）、分类排行比例条；分类可下钻到区间明细；另有自然年年度报告（月度趋势、分类与标签排行、记录最密集的一天）
 
 **周期记账**
-- 规则三种频率：每天 / 每周（勾选周几）/ 每月（选几号），金额为固定值，带分类、备注与标签
+- 规则三种频率：每天 / 每周（下拉多选周几）/ 每月（下拉选几号），金额为固定值，带分类、备注与标签；弹窗里的分类宫格固定一行四个
 - 结束条件三选一：无限 / 到指定日期 / 共 N 次
 - 到期项**只在冷启动时计算**，只列最近 90 天内的，生成「待确认」清单；点确认才写进账单，跳过表示这笔不记、之后不再提醒
 - 规则本身不等于已发生的支出，规则页与「我的」只显示规则条数，不做任何金额合计
+- 规则行与流水一样：点行进编辑，左滑才露出「删除」（删除前再弹一次确认）
 - 幂等：`transactions` 上 `(ruleId, dueDayKey)` 唯一索引 + `OnConflictStrategy.IGNORE`，同一期重复计算也只入一笔
 
 **我的**
@@ -195,11 +196,11 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 
 ```json
 {
-  "versionCode": 3,
-  "versionName": "0.2.0",
-  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.0/app-release.apk",
+  "versionCode": 4,
+  "versionName": "0.2.1",
+  "apkUrl": "https://github.com/zhaosai6869/qingzhang/releases/download/v0.2.1/app-release.apk",
   "sha256": "64 位十六进制小写，对应 apkUrl 那个文件",
-  "sizeBytes": 3106295,
+  "sizeBytes": 3089571,
   "notes": "这一版改了什么"
 }
 ```
@@ -233,7 +234,7 @@ curl --ssl-no-revoke -X POST -H "Authorization: Bearer $TOKEN" \
 
 - 无自动化测试，`app/src` 下只有 `main` 源集
 - 生物识别验证链路（自动弹窗、手动点按）尚未在真机确认——测试用 AVD 没有指纹录入入口
-- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」仍未在设备上跑过。v0.1.1 就是为这条链路准备的包，v0.2.0 的清单同样把 `sha256`/`sizeBytes` 与 Release 资产两侧核对过（GitHub 直链与镜像都返回同一摘要），但这只证明包可下、URL 拼接正确，不代表应用内的下载与安装弹窗已验证
+- 在线更新的「读清单 → 比对 versionCode」已在模拟器上用真实 https 源跑通；「下载 APK → 校验 → 调起安装器」仍未在设备上跑过。v0.1.1 就是为这条链路准备的包，v0.2.0 / v0.2.1 的清单同样把 `sha256`/`sizeBytes` 与 Release 资产两侧核对过（GitHub 直链与镜像都返回同一摘要），但这只证明包可下、URL 拼接正确，不代表应用内的下载与安装弹窗已验证
 - release 包（R8 全量混淆）只验证到「能编出来、签名正确、`versionCode/versionName` 写对」，没有装到设备跑过：模拟器上装的是 debug 签名，换成 release 签名必须先卸载，会连带清空测试账本数据。真机验证走的是 debug 包
 - 内置源的回退链路只验证了「读不通就放弃」这一半：四个候选各等 12 秒后被放弃、界面回到「检查更新」，取消也能中断；「主源超时后由镜像读成功」这半还没跑过——验证时那台 AVD 整机没有外网（IP ping 与 DNS 都不通），拿不到任何一条成功响应
 - `repository.download()` 仍是「一次 connect 打断不了」的老形状：下载阶段的取消要等各地址的 `connectTimeout`（15 秒）逐个走完，比检查阶段更拖
